@@ -127,10 +127,16 @@ internal static partial class Launcher
 		{
 			if (control is ButtonBase)
 			{
+				string accessibleName = (control.Text ?? string.Empty).Replace("&", string.Empty).Trim();
+				if (!string.IsNullOrEmpty(accessibleName))
+				{
+					control.AccessibleName = accessibleName;
+				}
 				string description = GetCommonButtonDescription(control.Text);
 				if (!string.IsNullOrEmpty(description))
 				{
 					toolTip.SetToolTip(control, description);
+					control.AccessibleDescription = description;
 				}
 			}
 			if (control.HasChildren)
@@ -140,15 +146,30 @@ internal static partial class Launcher
 		}
 	}
 
+	private static void ConfigureAccessibleField(Control control, string name, string description)
+	{
+		if (control == null)
+		{
+			return;
+		}
+		control.AccessibleName = name ?? string.Empty;
+		control.AccessibleDescription = description ?? string.Empty;
+	}
+
+	private static int GetMarqueeAnimationSpeed()
+	{
+		return SystemInformation.IsMenuAnimationEnabled || SystemInformation.IsMinimizeRestoreAnimationEnabled ? 28 : 0;
+	}
+
 	private static string GetCommonButtonDescription(string text)
 	{
 		string value = (text ?? string.Empty).Replace("&", string.Empty).Trim().ToLowerInvariant();
 		bool korean = string.Equals(Localization.CurrentLanguage, Localization.Korean, StringComparison.OrdinalIgnoreCase);
-		if (value.Contains("서버 시작") || value == "start server") return korean ? "선택한 프로필의 서버를 시작합니다." : "Start the selected server profile.";
-		if (value.Contains("안전하게 종료") || value == "stop") return korean ? "월드를 저장하고 서버를 종료합니다." : "Save the world and stop the server.";
-		if (value == "설정" || value == "settings") return korean ? "서버 종류와 게임 설정을 변경합니다." : "Change the server type and game settings.";
+		if (value.Contains("서버 시작") || value == "start server") return korean ? "선택한 프로필의 서버를 시작합니다. 단축키: F5" : "Start the selected server profile. Shortcut: F5";
+		if (value.Contains("안전하게 종료") || value == "stop" || value == "stop safely") return korean ? "월드를 저장하고 서버를 종료합니다. 단축키: Shift+F5" : "Save the world and stop the server. Shortcut: Shift+F5";
+		if (value == "설정" || value == "settings") return korean ? "서버 종류와 게임 설정을 변경합니다. 단축키: Ctrl+," : "Change the server type and game settings. Shortcut: Ctrl+,";
 		if (value.Contains("업글") || value.Contains("upgrade")) return korean ? "서버 실행 파일을 최신 호환 빌드로 갱신합니다." : "Update the server file to the latest compatible build.";
-		if (value.Contains("콘솔") || value.Contains("console")) return korean ? "서버 로그와 명령 입력창을 열거나 닫습니다." : "Open or close server logs and command input.";
+		if (value.Contains("콘솔") || value.Contains("console")) return korean ? "서버 로그와 명령 입력창을 열거나 닫습니다. 단축키: Ctrl+K" : "Open or close server logs and command input. Shortcut: Ctrl+K";
 		if (value.Contains("서버 관리") || value.Contains("server management")) return korean ? "프로필 관리와 멀티 서버 기능을 엽니다." : "Open profiles and multi-server tools.";
 		if (value.Contains("백업") || value.Contains("backup")) return korean ? "서버 전체를 백업하거나 복원합니다." : "Back up or restore the complete server.";
 		if (value == "콘텐츠" || value.Contains("content")) return korean ? "호환 플러그인과 모드를 찾아 설치합니다." : "Find and install compatible plugins or mods.";
@@ -364,7 +385,13 @@ internal static partial class Launcher
 			{ "Setup.SimulationDistance", "시뮬레이션 거리" },
 			{ "Setup.Owner", "서버 소유자" },
 			{ "Setup.Cancel", "다음에" },
+			{ "Setup.CancelEdit", "취소" },
 			{ "Setup.Save", "이대로 저장" },
+			{ "Setup.SaveEdit", "변경사항 저장" },
+			{ "Setup.ValidationSummary", "표시된 입력값을 확인해 주세요." },
+			{ "Setup.VersionLoading", "버전 목록 불러오는 중…" },
+			{ "Setup.VersionReady", "버전 목록 준비 완료" },
+			{ "Setup.VersionFallback", "네트워크 문제로 기본 목록 사용 중" },
 			{ "Setup.ValidateTitle", "설정 확인" },
 			{ "Setup.ServerNameRequired", "서버 이름을 입력해 주세요." },
 			{ "Setup.OwnerInvalid", "서버 소유자 이름은 영문, 숫자, 밑줄을 사용해 3~16자로 입력해 주세요." },
@@ -495,7 +522,13 @@ internal static partial class Launcher
 			{ "Setup.SimulationDistance", "Simulation distance" },
 			{ "Setup.Owner", "Server owner" },
 			{ "Setup.Cancel", "Later" },
+			{ "Setup.CancelEdit", "Cancel" },
 			{ "Setup.Save", "Save" },
+			{ "Setup.SaveEdit", "Save changes" },
+			{ "Setup.ValidationSummary", "Review the highlighted field." },
+			{ "Setup.VersionLoading", "Loading version list…" },
+			{ "Setup.VersionReady", "Version list ready" },
+			{ "Setup.VersionFallback", "Using the built-in list because the network is unavailable" },
 			{ "Setup.ValidateTitle", "Check settings" },
 			{ "Setup.ServerNameRequired", "Enter a server name." },
 			{ "Setup.OwnerInvalid", "Server owner must be 3-16 characters using letters, numbers, and underscores." },
@@ -1004,14 +1037,32 @@ internal static partial class Launcher
 		public static ThemePalette Create(bool dark)
 		{
 			ThemePalette palette = new ThemePalette();
+			if (SystemInformation.HighContrast)
+			{
+				palette.Window = SystemColors.Window;
+				palette.Card = SystemColors.Control;
+				palette.CardSecondary = SystemColors.Window;
+				palette.Text = SystemColors.WindowText;
+				palette.Muted = SystemColors.GrayText;
+				palette.Border = SystemColors.WindowText;
+				palette.Accent = SystemColors.Highlight;
+				palette.AccentHover = SystemColors.HotTrack;
+				palette.AccentSoft = SystemColors.Control;
+				palette.Danger = SystemColors.HotTrack;
+				palette.DangerSoft = SystemColors.Control;
+				palette.Success = SystemColors.Highlight;
+				palette.Warning = SystemColors.HotTrack;
+				palette.Console = SystemColors.Window;
+				return palette;
+			}
 			if (dark)
 			{
 				palette.Window = Color.FromArgb(23, 23, 28);
 				palette.Card = Color.FromArgb(32, 32, 38);
 				palette.CardSecondary = Color.FromArgb(42, 43, 50);
 				palette.Text = Color.FromArgb(242, 244, 246);
-				palette.Muted = Color.FromArgb(154, 160, 166);
-				palette.Border = Color.FromArgb(45, 46, 53);
+				palette.Muted = Color.FromArgb(174, 180, 188);
+				palette.Border = Color.FromArgb(58, 59, 68);
 				palette.Console = Color.FromArgb(15, 16, 20);
 			}
 			else
@@ -1020,23 +1071,24 @@ internal static partial class Launcher
 				palette.Card = Color.White;
 				palette.CardSecondary = Color.FromArgb(242, 244, 246);
 				palette.Text = Color.FromArgb(25, 31, 40);
-				palette.Muted = Color.FromArgb(139, 149, 161);
-				palette.Border = Color.FromArgb(242, 244, 246);
+				palette.Muted = Color.FromArgb(82, 94, 108);
+				palette.Border = Color.FromArgb(220, 226, 232);
 				palette.Console = Color.FromArgb(25, 28, 34);
 			}
-			palette.Accent = Color.FromArgb(49, 130, 246);
-			palette.AccentHover = Color.FromArgb(27, 100, 218);
+			palette.Accent = Color.FromArgb(0, 100, 255);
+			palette.AccentHover = Color.FromArgb(0, 78, 214);
 			palette.AccentSoft = dark ? Color.FromArgb(38, 61, 96) : Color.FromArgb(232, 240, 254);
-			palette.Danger = Color.FromArgb(240, 68, 82);
+			palette.Danger = dark ? Color.FromArgb(255, 113, 128) : Color.FromArgb(197, 40, 61);
 			palette.DangerSoft = dark ? Color.FromArgb(78, 40, 46) : Color.FromArgb(255, 235, 238);
-			palette.Success = Color.FromArgb(0, 196, 126);
-			palette.Warning = Color.FromArgb(255, 159, 67);
+			palette.Success = dark ? Color.FromArgb(49, 214, 155) : Color.FromArgb(8, 122, 85);
+			palette.Warning = dark ? Color.FromArgb(255, 176, 103) : Color.FromArgb(165, 78, 0);
 			return palette;
 		}
 	}
 
 	private sealed class LauncherForm : Form
 	{
+		private readonly RoundedPanel statusPill;
 		private readonly Label statusLabel;
 		private readonly Label statusDot;
 		private readonly Label noticeLabel;
@@ -1044,6 +1096,7 @@ internal static partial class Launcher
 		private readonly Label loadingDetailLabel;
 		private readonly ProgressBar loadingProgress;
 		private readonly TextBox addressBox;
+		private readonly Button copyButton;
 		private readonly Button startButton;
 		private readonly Button stopButton;
 		private readonly Button settingsButton;
@@ -1061,6 +1114,7 @@ internal static partial class Launcher
 		private readonly Panel consolePanel;
 		private readonly RichTextBox consoleBox;
 		private readonly TextBox commandBox;
+		private readonly Button sendButton;
 		private readonly TextBox consoleSearchBox;
 		private readonly ComboBox consoleFilterBox;
 		private readonly CheckBox consoleWrapBox;
@@ -1096,10 +1150,11 @@ internal static partial class Launcher
 			Text = Localization.T("App.Title") + " " + BuildVersionInfo.DisplayVersion;
 			Font = new Font("Segoe UI Variable Text", 10F);
 			StartPosition = FormStartPosition.CenterScreen;
-			MinimumSize = new Size(940, 620);
-			Size = new Size(1040, 680);
+			MinimumSize = new Size(940, 560);
+			Size = new Size(1040, 570);
 			FormBorderStyle = FormBorderStyle.Sizable;
-			MaximizeBox = false;
+			MaximizeBox = true;
+			KeyPreview = true;
 			AutoScaleMode = AutoScaleMode.Dpi;
 			consoleTimer = new System.Windows.Forms.Timer();
 			consoleTimer.Interval = 100;
@@ -1162,7 +1217,7 @@ internal static partial class Launcher
 			card.Tag = "main-card";
 			root.Controls.Add(card, 0, 1);
 
-			RoundedPanel statusPill = new RoundedPanel();
+			statusPill = new RoundedPanel();
 			statusPill.Location = new Point(24, 18);
 			statusPill.Size = new Size(150, 36);
 			statusPill.CornerRadius = 18;
@@ -1204,91 +1259,130 @@ internal static partial class Launcher
 			addressBox.Size = new Size(600, 24);
 			addressBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 			addressSurface.Controls.Add(addressBox);
-			Button copyButton = CreateButton(Localization.T("Address.Copy"), 104);
+			copyButton = CreateButton(Localization.T("Address.Copy"), 104);
 			Localize(copyButton, "Address.Copy");
 			copyButton.Tag = "secondary";
+			copyButton.Enabled = false;
 			copyButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 			copyButton.Location = new Point(addressSurface.Width - 118, 17);
 			copyButton.Click += delegate
 			{
-				if (!string.IsNullOrWhiteSpace(addressBox.Text) && addressBox.Text.IndexOf(Localization.T("Address.Empty"), StringComparison.Ordinal) < 0)
+				try
 				{
-					Clipboard.SetText(addressBox.Text);
-					ShowNoticeKey("Address.Copied", false);
+					if (copyButton.Enabled)
+					{
+						Clipboard.SetText(addressBox.Text);
+						ShowNoticeKey("Address.Copied", false);
+					}
+				}
+				catch (Exception exception)
+				{
+					ShowNotice((Localization.CurrentLanguage == Localization.Korean ? "주소를 복사하지 못했습니다: " : "Could not copy the address: ") + exception.Message, true);
 				}
 			};
 			addressSurface.Controls.Add(copyButton);
 
+			TableLayoutPanel primaryActions = new TableLayoutPanel();
+			primaryActions.Location = new Point(18, 152);
+			primaryActions.Size = new Size(card.ClientSize.Width - 36, 54);
+			primaryActions.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+			primaryActions.ColumnCount = 5;
+			primaryActions.RowCount = 1;
+			for (int column = 0; column < 5; column++) primaryActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+			primaryActions.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+			card.Controls.Add(primaryActions);
+
 			startButton = CreateButton(Localization.T("Button.Start"), 152);
 			Localize(startButton, "Button.Start");
 			startButton.Tag = "primary";
-			startButton.Location = new Point(24, 160);
+			startButton.Dock = DockStyle.Fill;
+			startButton.Margin = new Padding(6, 5, 6, 5);
 			startButton.Click += delegate { StartWorkflow(); };
-			card.Controls.Add(startButton);
+			primaryActions.Controls.Add(startButton, 0, 0);
 			stopButton = CreateButton(Localization.T("Button.Stop"), 136);
 			Localize(stopButton, "Button.Stop");
 			stopButton.Tag = "danger";
-			stopButton.Location = new Point(188, 160);
+			stopButton.Dock = DockStyle.Fill;
+			stopButton.Margin = new Padding(6, 5, 6, 5);
 			stopButton.Enabled = false;
 			stopButton.Click += delegate { StopServer(); };
-			card.Controls.Add(stopButton);
+			primaryActions.Controls.Add(stopButton, 1, 0);
 			settingsButton = CreateButton(Localization.T("Button.Settings"), 92);
 			Localize(settingsButton, "Button.Settings");
 			settingsButton.Tag = "secondary";
-			settingsButton.Location = new Point(336, 160);
+			settingsButton.Dock = DockStyle.Fill;
+			settingsButton.Margin = new Padding(6, 5, 6, 5);
 			settingsButton.Click += delegate { OpenSettings(); };
-			card.Controls.Add(settingsButton);
+			primaryActions.Controls.Add(settingsButton, 2, 0);
 			upgradeButton = CreateButton(Localization.T("Button.Upgrade"), 118);
 			Localize(upgradeButton, "Button.Upgrade");
 			upgradeButton.Tag = "secondary";
-			upgradeButton.Location = new Point(440, 160);
+			upgradeButton.Dock = DockStyle.Fill;
+			upgradeButton.Margin = new Padding(6, 5, 6, 5);
 			upgradeButton.Click += delegate { UpgradeServerFiles(); };
-			card.Controls.Add(upgradeButton);
+			primaryActions.Controls.Add(upgradeButton, 3, 0);
 			consoleButton = CreateButton(Localization.T("Button.ConsoleOpen"), 126);
 			consoleButton.Tag = "secondary";
-			consoleButton.Location = new Point(570, 160);
+			consoleButton.Dock = DockStyle.Fill;
+			consoleButton.Margin = new Padding(6, 5, 6, 5);
 			consoleButton.Click += delegate { ToggleConsole(); };
-			card.Controls.Add(consoleButton);
+			primaryActions.Controls.Add(consoleButton, 4, 0);
+
+			TableLayoutPanel toolActions = new TableLayoutPanel();
+			toolActions.Location = new Point(18, 208);
+			toolActions.Size = new Size(card.ClientSize.Width - 36, 54);
+			toolActions.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+			toolActions.ColumnCount = 6;
+			toolActions.RowCount = 1;
+			for (int column = 0; column < 6; column++) toolActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16.6667F));
+			toolActions.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+			card.Controls.Add(toolActions);
 
 			profilesButton = CreateButton(Localization.T("Button.ServerManagement"), 134);
 			Localize(profilesButton, "Button.ServerManagement");
 			profilesButton.Tag = "secondary";
-			profilesButton.Location = new Point(24, 216);
+			profilesButton.Dock = DockStyle.Fill;
+			profilesButton.Margin = new Padding(6, 5, 6, 5);
 			profilesButton.Click += delegate { RunUiAction(OpenServerManagement); };
-			card.Controls.Add(profilesButton);
+			toolActions.Controls.Add(profilesButton, 0, 0);
 			multiServerButton = CreateButton(Localization.T("Button.MultiServer"), 112);
 			multiServerButton.Tag = "secondary";
 			multiServerButton.Visible = false;
 			backupButton = CreateButton(Localization.T("Button.Backup"), 110);
 			Localize(backupButton, "Button.Backup");
 			backupButton.Tag = "secondary";
-			backupButton.Location = new Point(170, 216);
+			backupButton.Dock = DockStyle.Fill;
+			backupButton.Margin = new Padding(6, 5, 6, 5);
 			backupButton.Click += delegate { RunUiAction(OpenBackupManager); };
-			card.Controls.Add(backupButton);
+			toolActions.Controls.Add(backupButton, 1, 0);
 			contentButton = CreateButton(Localization.T("Button.Content"), 100);
 			Localize(contentButton, "Button.Content");
 			contentButton.Tag = "secondary";
-			contentButton.Location = new Point(292, 216);
+			contentButton.Dock = DockStyle.Fill;
+			contentButton.Margin = new Padding(6, 5, 6, 5);
 			contentButton.Click += delegate { RunUiAction(OpenContentManager); };
-			card.Controls.Add(contentButton);
+			toolActions.Controls.Add(contentButton, 2, 0);
 			playersButton = CreateButton(Localization.T("Button.Players"), 100);
 			Localize(playersButton, "Button.Players");
 			playersButton.Tag = "secondary";
-			playersButton.Location = new Point(404, 216);
+			playersButton.Dock = DockStyle.Fill;
+			playersButton.Margin = new Padding(6, 5, 6, 5);
 			playersButton.Click += delegate { RunUiAction(OpenPlayerManager); };
-			card.Controls.Add(playersButton);
+			toolActions.Controls.Add(playersButton, 3, 0);
 			networkButton = CreateButton(Localization.T("Button.Network"), 110);
 			Localize(networkButton, "Button.Network");
 			networkButton.Tag = "secondary";
-			networkButton.Location = new Point(516, 216);
+			networkButton.Dock = DockStyle.Fill;
+			networkButton.Margin = new Padding(6, 5, 6, 5);
 			networkButton.Click += delegate { RunUiAction(OpenNetworkTools); };
-			card.Controls.Add(networkButton);
+			toolActions.Controls.Add(networkButton, 4, 0);
 			diagnosticsButton = CreateButton(Localization.T("Button.Diagnostics"), 110);
 			Localize(diagnosticsButton, "Button.Diagnostics");
 			diagnosticsButton.Tag = "secondary";
-			diagnosticsButton.Location = new Point(638, 216);
+			diagnosticsButton.Dock = DockStyle.Fill;
+			diagnosticsButton.Margin = new Padding(6, 5, 6, 5);
 			diagnosticsButton.Click += delegate { CreateDiagnostics(); };
-			card.Controls.Add(diagnosticsButton);
+			toolActions.Controls.Add(diagnosticsButton, 5, 0);
 			Label featureList = new Label();
 			Localize(featureList, "Features");
 			featureList.Font = new Font("Segoe UI Variable Text", 9F);
@@ -1300,6 +1394,8 @@ internal static partial class Launcher
 			card.Resize += delegate
 			{
 				addressSurface.Width = card.ClientSize.Width - 48;
+				primaryActions.Width = card.ClientSize.Width - 36;
+				toolActions.Width = card.ClientSize.Width - 36;
 				copyButton.Left = addressSurface.ClientSize.Width - copyButton.Width - 14;
 				addressBox.Width = copyButton.Left - addressBox.Left - 10;
 				featureList.Width = card.ClientSize.Width - 52;
@@ -1312,6 +1408,7 @@ internal static partial class Launcher
 			noticeLabel.Dock = DockStyle.Top;
 			noticeLabel.Height = 30;
 			noticeLabel.TextAlign = ContentAlignment.MiddleLeft;
+			noticeLabel.AutoEllipsis = true;
 			noticeTextKey = "Notice.Ready";
 			noticeLabel.Text = Localization.T(noticeTextKey);
 			noticeLabel.Font = new Font("Segoe UI Variable Text", 9.5F);
@@ -1330,7 +1427,7 @@ internal static partial class Launcher
 			loadingProgress.Dock = DockStyle.Right;
 			loadingProgress.Width = 220;
 			loadingProgress.Style = ProgressBarStyle.Marquee;
-			loadingProgress.MarqueeAnimationSpeed = 28;
+			loadingProgress.MarqueeAnimationSpeed = GetMarqueeAnimationSpeed();
 			loadingPanel.Controls.Add(loadingProgress);
 
 			consolePanel = new Panel();
@@ -1378,6 +1475,7 @@ internal static partial class Launcher
 			commandBox = new TextBox();
 			commandBox.Dock = DockStyle.Fill;
 			commandBox.Enabled = false;
+			commandBox.TextChanged += delegate { sendButton.Enabled = serverRunning && !string.IsNullOrWhiteSpace(commandBox.Text); };
 			commandBox.KeyDown += delegate(object sender, KeyEventArgs eventArgs)
 			{
 				if (eventArgs.KeyCode == Keys.Enter)
@@ -1387,10 +1485,11 @@ internal static partial class Launcher
 				}
 			};
 			commandPanel.Controls.Add(commandBox);
-			Button sendButton = CreateButton(Localization.T("Button.Send"), 86);
+			sendButton = CreateButton(Localization.T("Button.Send"), 86);
 			Localize(sendButton, "Button.Send");
 			sendButton.Tag = "primary";
 			sendButton.Dock = DockStyle.Right;
+			sendButton.Enabled = false;
 			sendButton.Click += delegate { SendCommandFromBox(); };
 			commandPanel.Controls.Add(sendButton);
 
@@ -1399,8 +1498,47 @@ internal static partial class Launcher
 			Shown += delegate { BeginInvoke((MethodInvoker)BeginStartupInitialization); };
 			startButton.Enabled = false;
 			playersButton.Enabled = false;
+			ConfigureAccessibleField(addressBox, Localization.T("Address.Title"), Localization.CurrentLanguage == Localization.Korean ? "친구가 서버에 접속할 때 사용하는 주소입니다." : "The address friends use to join the server.");
+			ConfigureAccessibleField(consoleSearchBox, Localization.T("Console.Search"), Localization.CurrentLanguage == Localization.Korean ? "표시된 콘솔 로그를 검색합니다." : "Search the visible console log.");
+			ConfigureAccessibleField(consoleFilterBox, Localization.T("Console.All"), Localization.CurrentLanguage == Localization.Korean ? "콘솔 로그 수준을 필터링합니다." : "Filter console messages by level.");
+			ConfigureAccessibleField(commandBox, Localization.CurrentLanguage == Localization.Korean ? "서버 명령" : "Server command", Localization.CurrentLanguage == Localization.Korean ? "실행 중인 서버에 보낼 명령을 입력합니다." : "Enter a command to send to the running server.");
 			ApplyTheme();
 			ApplyLocalization();
+		}
+
+		protected override bool ProcessCmdKey(ref Message message, Keys keyData)
+		{
+			if (keyData == Keys.F5 && startButton.Enabled)
+			{
+				StartWorkflow();
+				return true;
+			}
+			if (keyData == (Keys.Shift | Keys.F5) && stopButton.Enabled)
+			{
+				StopServer();
+				return true;
+			}
+			if (keyData == (Keys.Control | Keys.Oemcomma) && settingsButton.Enabled)
+			{
+				OpenSettings();
+				return true;
+			}
+			if (keyData == (Keys.Control | Keys.K))
+			{
+				if (!consolePanel.Visible)
+				{
+					ToggleConsole();
+				}
+				consoleSearchBox.Focus();
+				consoleSearchBox.SelectAll();
+				return true;
+			}
+			if (keyData == Keys.Escape && consolePanel.Visible)
+			{
+				ToggleConsole();
+				return true;
+			}
+			return base.ProcessCmdKey(ref message, keyData);
 		}
 
 		private static Button CreateButton(string text, int width)
@@ -1482,7 +1620,10 @@ internal static partial class Launcher
 			if (addressBox != null && addressBox.Text.IndexOf(":") < 0)
 			{
 				addressBox.Text = Localization.T("Address.Empty");
+				copyButton.Enabled = false;
 			}
+			ConfigureAccessibleField(addressBox, Localization.T("Address.Title"), Localization.CurrentLanguage == Localization.Korean ? "친구가 서버에 접속할 때 사용하는 주소입니다." : "The address friends use to join the server.");
+			ConfigureAccessibleField(consoleSearchBox, Localization.T("Console.Search"), Localization.CurrentLanguage == Localization.Korean ? "표시된 콘솔 로그를 검색합니다." : "Search the visible console log.");
 			ApplyCommonButtonToolTips(this);
 		}
 
@@ -1629,6 +1770,9 @@ internal static partial class Launcher
 			}
 			loadingPanel.Visible = active;
 			loadingDetailLabel.Text = message ?? string.Empty;
+			loadingDetailLabel.AccessibleName = loadingDetailLabel.Text;
+			loadingProgress.AccessibleName = loadingDetailLabel.Text;
+			UseWaitCursor = active;
 			if (!active)
 			{
 				return;
@@ -1641,7 +1785,7 @@ internal static partial class Launcher
 			else
 			{
 				loadingProgress.Style = ProgressBarStyle.Marquee;
-				loadingProgress.MarqueeAnimationSpeed = 28;
+				loadingProgress.MarqueeAnimationSpeed = GetMarqueeAnimationSpeed();
 			}
 		}
 
@@ -1706,6 +1850,7 @@ internal static partial class Launcher
 			settingsButton.Enabled = true;
 			upgradeButton.Enabled = true;
 			commandBox.Enabled = false;
+			sendButton.Enabled = false;
 			SetLoadingState(string.Empty, false, -1);
 			string upnpCleanup = ConsumeUpnpCleanupStatus();
 			if (canceled)
@@ -1747,6 +1892,7 @@ internal static partial class Launcher
 			SetConnectionAddress(address);
 			stopButton.Enabled = true;
 			commandBox.Enabled = true;
+			sendButton.Enabled = !string.IsNullOrWhiteSpace(commandBox.Text);
 			ShowNoticeKey("Notice.WaitingServer", false);
 			SetLoadingState(Localization.CurrentLanguage == Localization.Korean ? "서버 프로세스가 포트를 열 때까지 기다리고 있습니다…" : "Waiting for the server process to open its port…", true, -1);
 		}
@@ -1769,6 +1915,8 @@ internal static partial class Launcher
 			if (SendServerCommand("stop"))
 			{
 				stopButton.Enabled = false;
+				commandBox.Enabled = false;
+				sendButton.Enabled = false;
 				SetStatusKey("Status.Stopping", false);
 				ShowNoticeKey("Notice.Stopping", false);
 			}
@@ -1777,6 +1925,11 @@ internal static partial class Launcher
 		private void SendCommandFromBox()
 		{
 			string command = commandBox.Text.Trim();
+			if (string.IsNullOrEmpty(command))
+			{
+				commandBox.Focus();
+				return;
+			}
 			if (SendServerCommand(command))
 			{
 				commandBox.Clear();
@@ -1835,7 +1988,7 @@ internal static partial class Launcher
 			catch (Exception exception)
 			{
 				string prefix = Localization.CurrentLanguage == Localization.Korean ? "작업을 완료하지 못했습니다: " : "Could not complete the action: ";
-				MessageBox.Show(this, prefix + exception.Message, Localization.T("App.Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				ShowNotice(prefix + exception.Message, true);
 			}
 		}
 
@@ -2188,7 +2341,11 @@ internal static partial class Launcher
 				TryPostToUi(this, (MethodInvoker)delegate { SetConnectionAddress(address); });
 				return;
 			}
-			addressBox.Text = address;
+			addressBox.Text = string.IsNullOrWhiteSpace(address) ? Localization.T("Address.Empty") : address;
+			copyButton.Enabled = !string.IsNullOrWhiteSpace(address) && address.IndexOf(":", StringComparison.Ordinal) >= 0;
+			addressBox.AccessibleDescription = copyButton.Enabled
+				? (Localization.CurrentLanguage == Localization.Korean ? "복사할 수 있는 서버 접속 주소입니다." : "Server connection address ready to copy.")
+				: (Localization.CurrentLanguage == Localization.Korean ? "서버가 준비되면 접속 주소가 표시됩니다." : "The connection address appears when the server is ready.");
 		}
 
 		public void ShowNotice(string message, bool warning)
@@ -2225,6 +2382,7 @@ internal static partial class Launcher
 		{
 			noticeWarning = warning;
 			noticeLabel.Text = text;
+			noticeLabel.AccessibleName = text;
 			noticeLabel.ForeColor = warning ? ThemePalette.Create(darkTheme).Warning : ThemePalette.Create(darkTheme).Muted;
 		}
 
@@ -2245,6 +2403,8 @@ internal static partial class Launcher
 			ThemePalette palette = ThemePalette.Create(darkTheme);
 			statusWarning = warning;
 			statusLabel.Text = text;
+			statusLabel.AccessibleName = text;
+			statusPill.Width = Math.Min(430, Math.Max(150, statusLabel.PreferredWidth + 58));
 			statusDot.ForeColor = warning ? palette.Warning : (serverRunning ? palette.Success : palette.Muted);
 		}
 
@@ -2393,6 +2553,14 @@ internal static partial class Launcher
 		}
 	}
 
+	private sealed class BufferedListView : ListView
+	{
+		public BufferedListView()
+		{
+			SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+		}
+	}
+
 	private sealed class RoundedButton : Button
 	{
 		private bool mouseOver;
@@ -2441,6 +2609,13 @@ internal static partial class Launcher
 			base.OnMouseUp(eventArgs);
 		}
 
+		protected override void OnEnabledChanged(EventArgs eventArgs)
+		{
+			Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+			Invalidate();
+			base.OnEnabledChanged(eventArgs);
+		}
+
 		protected override void OnGotFocus(EventArgs eventArgs)
 		{
 			base.OnGotFocus(eventArgs);
@@ -2486,7 +2661,7 @@ internal static partial class Launcher
 			{
 				Rectangle focusBounds = new Rectangle(3, 3, Math.Max(1, Width - 7), Math.Max(1, Height - 7));
 				using (GraphicsPath focusPath = RoundedPanel.CreateRoundedRectangle(focusBounds, Math.Min(11, Height / 2)))
-				using (Pen focusPen = new Pen(SystemColors.Highlight, 1F))
+				using (Pen focusPen = new Pen(SystemColors.Highlight, 2F))
 				{
 					focusPen.DashStyle = DashStyle.Dot;
 					eventArgs.Graphics.DrawPath(focusPen, focusPath);
@@ -2550,6 +2725,13 @@ internal static partial class Launcher
 			Invalidate();
 		}
 
+		protected override void OnEnabledChanged(EventArgs eventArgs)
+		{
+			Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+			Invalidate();
+			base.OnEnabledChanged(eventArgs);
+		}
+
 		protected override void OnPaint(PaintEventArgs eventArgs)
 		{
 			eventArgs.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -2578,7 +2760,7 @@ internal static partial class Launcher
 			{
 				Rectangle focusBounds = new Rectangle(4, 4, Math.Max(1, Width - 9), Math.Max(1, Height - 9));
 				using (GraphicsPath focusPath = RoundedPanel.CreateRoundedRectangle(focusBounds, 11))
-				using (Pen focusPen = new Pen(SystemColors.Highlight, 1F))
+				using (Pen focusPen = new Pen(SystemColors.Highlight, 2F))
 				{
 					focusPen.DashStyle = DashStyle.Dot;
 					eventArgs.Graphics.DrawPath(focusPen, focusPath);
@@ -2620,6 +2802,9 @@ internal static partial class Launcher
 		private readonly Button advancedButton;
 		private readonly ErrorProvider validationErrors;
 		private readonly ToolTip setupToolTip;
+		private readonly Panel body;
+		private readonly Label validationLabel;
+		private readonly ThemePalette setupPalette;
 		private readonly bool worldExists;
 		private string selectedPreset;
 		private int versionLoadRequest;
@@ -2656,16 +2841,16 @@ internal static partial class Launcher
 			setupToolTip = new ToolTip();
 			setupToolTip.AutoPopDelay = 8000;
 			bool dark = launcherForm != null && launcherForm.UsesDarkTheme;
-			ThemePalette setupPalette = ThemePalette.Create(dark);
+			setupPalette = ThemePalette.Create(dark);
 			BackColor = setupPalette.Window;
 			ForeColor = setupPalette.Text;
 
-			Panel body = new Panel();
+			body = new Panel();
 			body.Location = new Point(26, 20);
 			body.Size = new Size(Math.Max(320, ClientSize.Width - 52), Math.Max(400, ClientSize.Height - 92));
 			body.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 			body.AutoScroll = true;
-			body.AutoScrollMinSize = new Size(700, 710);
+			body.AutoScrollMinSize = new Size(0, 700);
 			Controls.Add(body);
 
 			Label title = NewLabel(Localization.T(editing ? "Setup.Heading.Edit" : "Setup.Heading.New"), 21F, true);
@@ -2707,7 +2892,7 @@ internal static partial class Launcher
 			body.Controls.Add(versionBox);
 			includeSnapshotsBox = NewCheckBox(Localization.T("Setup.IncludeSnapshots"), current.IncludeSnapshots);
 			includeSnapshotsBox.AutoSize = false;
-			includeSnapshotsBox.Size = new Size(140, 38);
+			includeSnapshotsBox.Size = new Size(150, 38);
 			includeSnapshotsBox.Location = new Point(558, 120);
 			includeSnapshotsBox.TabIndex = 3;
 			body.Controls.Add(includeSnapshotsBox);
@@ -2906,14 +3091,24 @@ internal static partial class Launcher
 			ownerBox.TabIndex = 30;
 			advancedPanel.Controls.Add(ownerBox);
 
-			Button cancel = NewFlatButton(Localization.T("Setup.Cancel"), 100);
+			validationLabel = NewLabel(string.Empty, 9F, false);
+			validationLabel.Location = new Point(26, ClientSize.Height - 58);
+			validationLabel.Size = new Size(Math.Max(180, ClientSize.Width - 310), 44);
+			validationLabel.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+			validationLabel.AutoSize = false;
+			validationLabel.TextAlign = ContentAlignment.MiddleLeft;
+			validationLabel.ForeColor = setupPalette.Warning;
+			validationLabel.AccessibleRole = AccessibleRole.Alert;
+			Controls.Add(validationLabel);
+
+			Button cancel = NewFlatButton(Localization.T(editing ? "Setup.CancelEdit" : "Setup.Cancel"), 100);
 			cancel.Tag = "secondary";
 			cancel.Location = new Point(ClientSize.Width - 244, ClientSize.Height - 54);
 			cancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
 			cancel.DialogResult = DialogResult.Cancel;
 			cancel.TabIndex = 40;
 			Controls.Add(cancel);
-			Button save = NewFlatButton(Localization.T("Setup.Save"), 132);
+			Button save = NewFlatButton(Localization.T(editing ? "Setup.SaveEdit" : "Setup.Save"), 132);
 			save.Tag = "primary";
 			save.Location = new Point(ClientSize.Width - 132, ClientSize.Height - 54);
 			save.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
@@ -2937,10 +3132,56 @@ internal static partial class Launcher
 			UpdateManualJarControls();
 			SelectInitialPreset(current.PresetName);
 			SelectComboValues(current);
+			ConfigureSetupAccessibility();
+			RegisterValidationReset(profileBox);
+			RegisterValidationReset(motdBox);
+			RegisterValidationReset(manualJarPathBox);
+			RegisterValidationReset(ownerBox);
 			ApplySetupTheme(this, setupPalette);
 			ApplyCommonButtonToolTips(this);
-			save.BackColor = setupPalette.Accent;
+			 save.BackColor = setupPalette.Accent;
 			save.ForeColor = Color.White;
+		}
+
+		private void ConfigureSetupAccessibility()
+		{
+			bool korean = string.Equals(Localization.CurrentLanguage, Localization.Korean, StringComparison.OrdinalIgnoreCase);
+			ConfigureAccessibleField(profileBox, Localization.T("Setup.ProfileName"), korean ? "서버 목록과 데이터 폴더를 구분하는 이름입니다." : "Name used to identify this server profile and its data folder.");
+			ConfigureAccessibleField(serverTypeBox, Localization.T("Setup.ServerType"), korean ? "Paper, Purpur, Fabric, Vanilla 또는 직접 JAR을 선택합니다." : "Choose Paper, Purpur, Fabric, Vanilla, or a custom JAR.");
+			ConfigureAccessibleField(versionBox, Localization.T("Setup.MinecraftVersion"), korean ? "새 서버에서 사용할 Minecraft 버전입니다." : "Minecraft version used by the server.");
+			ConfigureAccessibleField(manualJarPathBox, Localization.T("Setup.UseManualJar"), korean ? "직접 실행할 서버 JAR 파일 경로입니다." : "Path to the custom server JAR.");
+			ConfigureAccessibleField(customJavaBox, Localization.T("Setup.JavaVersion"), korean ? "직접 JAR 제작자가 요구한 Java 버전입니다." : "Java version required by the custom JAR author.");
+			ConfigureAccessibleField(motdBox, Localization.T("Setup.ServerName"), korean ? "서버 목록에 표시되는 소개 문구입니다." : "Description shown in the Minecraft server list.");
+			ConfigureAccessibleField(playersBox, Localization.T("Setup.MaxPlayers"), korean ? "동시에 접속할 수 있는 최대 인원입니다." : "Maximum number of simultaneous players.");
+			ConfigureAccessibleField(portBox, Localization.T("Setup.Port"), korean ? "서버가 사용할 TCP 포트입니다." : "TCP port used by the server.");
+			ConfigureAccessibleField(memoryBox, Localization.T("Setup.Memory"), korean ? "서버에 할당할 최대 메모리입니다." : "Maximum memory allocated to the server.");
+			ConfigureAccessibleField(gameModeBox, Localization.T("Setup.GameMode"), string.Empty);
+			ConfigureAccessibleField(difficultyBox, Localization.T("Setup.Difficulty"), string.Empty);
+			ConfigureAccessibleField(viewBox, Localization.T("Setup.ViewDistance"), korean ? "플레이어 주변에서 전송할 청크 범위입니다." : "Chunk radius sent around each player.");
+			ConfigureAccessibleField(simulationBox, Localization.T("Setup.SimulationDistance"), korean ? "몹과 레드스톤이 동작하는 청크 범위입니다." : "Chunk radius where mobs and redstone remain active.");
+			ConfigureAccessibleField(ownerBox, Localization.T("Setup.Owner"), korean ? "자동 OP를 받을 Minecraft 사용자 이름입니다." : "Minecraft username that receives owner operator access.");
+		}
+
+		private void RegisterValidationReset(Control control)
+		{
+			control.TextChanged += delegate
+			{
+				if (!string.IsNullOrEmpty(validationErrors.GetError(control)))
+				{
+					validationErrors.SetError(control, string.Empty);
+					validationLabel.Text = string.Empty;
+				}
+			};
+		}
+
+		private void ShowValidationError(Control control, string message)
+		{
+			validationErrors.SetError(control, message);
+			validationLabel.Text = message;
+			validationLabel.AccessibleName = message;
+			validationLabel.ForeColor = setupPalette.Warning;
+			body.ScrollControlIntoView(control);
+			control.Focus();
 		}
 
 		private void SelectRuntimeValues(ServerSettings current)
@@ -3022,12 +3263,16 @@ internal static partial class Launcher
 				CachedVersionChoices cached;
 				if (VersionCache.TryGetValue(cacheKey, out cached) && DateTime.UtcNow - cached.LoadedUtc < TimeSpan.FromMinutes(10.0))
 				{
-					versionStatusLabel.Text = Localization.CurrentLanguage == Localization.Korean ? "버전 목록 준비 완료" : "Version list ready";
+					versionStatusLabel.Text = Localization.T("Setup.VersionReady");
+					versionStatusLabel.ForeColor = setupPalette.Muted;
+					setupToolTip.SetToolTip(versionStatusLabel, string.Empty);
 					return;
 				}
 			}
 			int request = Interlocked.Increment(ref versionLoadRequest);
-			versionStatusLabel.Text = Localization.CurrentLanguage == Localization.Korean ? "버전 목록 불러오는 중…" : "Loading version list…";
+			versionStatusLabel.Text = Localization.T("Setup.VersionLoading");
+			versionStatusLabel.ForeColor = setupPalette.Muted;
+			setupToolTip.SetToolTip(versionStatusLabel, string.Empty);
 			Thread worker = new Thread((ThreadStart)delegate
 			{
 				string[] loaded = null;
@@ -3061,12 +3306,17 @@ internal static partial class Launcher
 					{
 						string currentSelection = versionBox.SelectedItem == null ? previous : Convert.ToString(versionBox.SelectedItem);
 						ApplyVersionChoices(loaded, currentSelection);
-						versionStatusLabel.Text = Localization.CurrentLanguage == Localization.Korean ? "버전 목록 준비 완료" : "Version list ready";
+						versionStatusLabel.Text = Localization.T("Setup.VersionReady");
+						versionStatusLabel.ForeColor = setupPalette.Muted;
+						setupToolTip.SetToolTip(versionStatusLabel, string.Empty);
 					}
 					else
 					{
-						versionStatusLabel.Text = (Localization.CurrentLanguage == Localization.Korean ? "기본 목록 사용 중" : "Using the built-in list") + (failure == null ? string.Empty : " · " + failure.Message);
+						versionStatusLabel.Text = Localization.T("Setup.VersionFallback");
+						versionStatusLabel.ForeColor = setupPalette.Warning;
+						setupToolTip.SetToolTip(versionStatusLabel, failure == null ? string.Empty : failure.Message);
 					}
+					versionStatusLabel.AccessibleName = versionStatusLabel.Text;
 				});
 			});
 			worker.IsBackground = true;
@@ -3150,18 +3400,15 @@ internal static partial class Launcher
 		private void SaveSettings(object sender, EventArgs eventArgs)
 		{
 			validationErrors.Clear();
-			if (string.IsNullOrWhiteSpace(motdBox.Text))
-			{
-				validationErrors.SetError(motdBox, Localization.T("Setup.ServerNameRequired"));
-				MessageBox.Show(Localization.T("Setup.ServerNameRequired"), Localization.T("Setup.ValidateTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				motdBox.Focus();
-				return;
-			}
+			validationLabel.Text = string.Empty;
 			if (!IsValidProfileName(profileBox.Text.Trim()))
 			{
-				validationErrors.SetError(profileBox, Localization.T("Setup.ProfileInvalid"));
-				MessageBox.Show(Localization.T("Setup.ProfileInvalid"), Localization.T("Setup.ValidateTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				profileBox.Focus();
+				ShowValidationError(profileBox, Localization.T("Setup.ProfileInvalid"));
+				return;
+			}
+			if (string.IsNullOrWhiteSpace(motdBox.Text))
+			{
+				ShowValidationError(motdBox, Localization.T("Setup.ServerNameRequired"));
 				return;
 			}
 			string[] serverTypeValues = GetServerTypeValues();
@@ -3169,18 +3416,14 @@ internal static partial class Launcher
 			bool useManualJar = manualJarBox.Checked || selectedServerType == "custom";
 			if (useManualJar && (string.IsNullOrWhiteSpace(manualJarPathBox.Text) || !File.Exists(manualJarPathBox.Text.Trim('"', ' '))))
 			{
-				validationErrors.SetError(manualJarPathBox, Localization.T("Setup.ManualJarMissing"));
-				MessageBox.Show(Localization.T("Setup.ManualJarMissing"), Localization.T("Setup.ValidateTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				manualJarPathBox.Focus();
+				ShowValidationError(manualJarPathBox, Localization.T("Setup.ManualJarMissing"));
 				return;
 			}
 			if (!IsValidOwnerName(ownerBox.Text.Trim()))
 			{
-				validationErrors.SetError(ownerBox, Localization.T("Setup.OwnerInvalid"));
-				MessageBox.Show(Localization.T("Setup.OwnerInvalid"), Localization.T("Setup.ValidateTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
 				advancedPanel.Visible = true;
 				advancedButton.Text = Localization.T("Setup.CloseMore");
-				ownerBox.Focus();
+				ShowValidationError(ownerBox, Localization.T("Setup.OwnerInvalid"));
 				return;
 			}
 			if (!onlineModeBox.Checked)

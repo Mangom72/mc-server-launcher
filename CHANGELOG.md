@@ -2,6 +2,26 @@
 
 이 프로젝트는 제품 버전에 [Semantic Versioning](https://semver.org/)을 사용합니다. `26.2.45.xx` 값은 별도의 내부 빌드 번호입니다.
 
+## [0.3.1] - 2026-07-12
+
+내부 빌드: `26.2.45.25`
+
+### Changed
+
+- 메인 작업 버튼을 창 너비에 맞게 정렬하고 기본 창 높이를 실제 콘텐츠에 맞게 조정
+- 라이트·다크·Windows 고대비 모드의 텍스트, 경계선과 상태 색상 대비 개선
+- 주소 복사와 명령 전송 버튼의 활성 상태, 로딩 커서와 상태 안내를 실제 동작과 일치하도록 개선
+- 설정 화면의 입력 오류를 관련 필드 옆과 하단에 표시하고 중복 경고 창 제거
+- 설정 화면의 불필요한 가로 스크롤 제거 및 작은 화면에서는 세로 스크롤만 사용
+- 콘텐츠 설치 실패 메시지에 재시도 경로를 제공하고 중복 팝업 제거
+- 서버 관리 목록을 전체 재생성하지 않고 갱신해 깜빡임과 선택 위치 이동 방지
+
+### Added
+
+- F5 시작, Shift+F5 안전 종료, Ctrl+, 설정, Ctrl+K 콘솔 검색 단축키
+- 입력 필드와 상태 영역의 접근성 이름·설명, 명확한 2px 키보드 포커스 표시
+- UX 대비, 접근성 역할과 비활성 버튼 커서를 확인하는 자동 회귀 테스트
+
 ## [0.3.0] - 2026-07-11
 
 내부 빌드: `26.2.45.24`
@@ -27,5 +47,7 @@
 - 기존 `Minecraft-Servers-Data` 자동 감지 및 비파괴 사용
 
 ## English
+
+Version `0.3.1` improves responsive action layouts, light/dark/high-contrast readability, keyboard and screen-reader accessibility, inline setup validation, loading and disabled states, content error recovery, and stable server-list updates without selection flicker.
 
 Version `0.3.0` introduces reproducible Portable and installer builds, selectable persistent data storage, separate semantic product and internal build versions, approved and verified launcher updates with rollback, release automation, policy documents, and core regression tests. Existing server data structures and non-destructive Portable data discovery are preserved.

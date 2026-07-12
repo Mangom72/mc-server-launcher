@@ -19,7 +19,7 @@ foreach ($path in @($portable, $zip, $setup)) {
 
 $portableInfo = Get-Item -LiteralPath $portable
 $portableHash = (Get-FileHash -LiteralPath $portable -Algorithm SHA256).Hash.ToLowerInvariant()
-$notes = "Portable/installer distribution, selectable data storage, approved SHA-256 verified updates, and recovery-safe replacement."
+$notes = "Responsive launcher UX, accessible themes and keyboard focus, inline setup validation, stable server lists, and SHA-256 verified updates."
 $metadata = [ordered]@{
     version = [string]$version.productVersion
     build = [string]$version.buildNumber
@@ -54,6 +54,14 @@ $releaseNotes = @"
 - 자동 업데이트 파일의 크기와 SHA-256을 검증하며, 교체 실패 시 기존 실행 파일로 복구합니다.
 - 최초 설정 화면의 배치와 고해상도 DPI 대응을 개선했습니다.
 - GitHub Actions에서 테스트, Portable, 설치 파일, 해시와 업데이트 메타데이터를 자동 생성합니다.
+
+### UX 개선
+
+- 메인 작업 버튼이 창 너비에 맞게 정렬되며, 콘솔을 닫았을 때 불필요한 빈 공간을 줄였습니다.
+- 라이트·다크·Windows 고대비 모드의 텍스트 대비와 키보드 포커스 표시를 개선했습니다.
+- 설정 입력 오류를 관련 필드에서 바로 안내하고 불필요한 가로 스크롤과 중복 팝업을 제거했습니다.
+- 서버 관리 목록의 깜빡임과 선택 위치 이동을 줄이고 로딩·비활성 상태를 더 명확하게 표시합니다.
+- F5, Shift+F5, Ctrl+쉼표, Ctrl+K 단축키를 추가했습니다.
 
 ### 데이터와 설치 주의 사항
 

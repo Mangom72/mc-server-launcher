@@ -2,7 +2,7 @@
 
 Windows 10과 Windows 11에서 마인크래프트 서버를 쉽게 열기 위한 런처입니다. Java 런타임, 서버 파일 준비, 최초 설정, 업데이트, 백업, 포트포워딩 점검을 최대한 자동화합니다.
 
-현재 제품 버전은 `v0.3.0`, 내부 빌드 번호는 `26.2.45.24`입니다.
+현재 제품 버전은 `v0.3.1`, 내부 빌드 번호는 `26.2.45.25`입니다.
 
 ## 다운로드
 
@@ -212,7 +212,7 @@ Minecraft-Servers-Data/
 
 ## 제품 버전과 자동 업데이트
 
-사용자에게 표시되는 제품 버전은 Semantic Versioning 형식의 `v0.3.0`이고, `26.2.45.24`는 소스와 빌드를 구분하는 내부 번호입니다. 두 값의 단일 기준은 `version.json`입니다.
+사용자에게 표시되는 제품 버전은 Semantic Versioning 형식의 `v0.3.1`이고, `26.2.45.25`는 소스와 빌드를 구분하는 내부 번호입니다. 두 값의 단일 기준은 `version.json`입니다.
 
 런처는 GitHub Release의 `update.json`을 HTTPS로 확인합니다. 새 버전이 있으면 현재/새 제품 버전, 빌드 번호, 주요 변경 사항과 다운로드 크기를 먼저 보여 주며 사용자가 승인한 경우에만 내려받습니다. 다운로드는 임시 폴더에 저장하고 크기와 SHA-256을 확인합니다. 기존 EXE를 백업한 뒤 별도 프로세스에서 교체하고, 새 버전의 시작 확인을 받지 못하면 기존 EXE를 복원합니다. 업데이트 확인·다운로드·교체가 실패해도 서버 실행은 계속할 수 있습니다.
 
@@ -258,8 +258,8 @@ Minecraft-Servers-Data/
 
 ## 현재 로컬 빌드
 
-- 제품 버전: `0.3.0`
-- 빌드 번호: `26.2.45.24`
+- 제품 버전: `0.3.1`
+- 빌드 번호: `26.2.45.25`
 - 파일명: `Minecraft-Server-Launcher.exe`
 
 ---
@@ -268,7 +268,7 @@ Minecraft-Servers-Data/
 
 Minecraft Server Launcher runs Minecraft servers on Windows 10 and Windows 11 with minimal setup. It prepares Java, manages server files, provides a first-run setup wizard, checks updates, creates backups, and helps verify port forwarding.
 
-The current product version is `v0.3.0`; the internal build number is `26.2.45.24`.
+The current product version is `v0.3.1`; the internal build number is `26.2.45.25`.
 
 ## Downloads
 
@@ -377,7 +377,7 @@ The launcher may access the internet to:
 
 ## Product version and launcher updates
 
-The user-facing product version uses Semantic Versioning (`v0.3.0`); `26.2.45.24` is a separate internal build number. `version.json` is the single source for both values.
+The user-facing product version uses Semantic Versioning (`v0.3.1`); `26.2.45.25` is a separate internal build number. `version.json` is the single source for both values.
 
 The launcher retrieves `update.json` over HTTPS. It shows current/new versions, the build number, release notes, and download size before asking for approval. Approved files are downloaded to a temporary directory and verified against both size and SHA-256. The current EXE is backed up, replacement runs in a separate process, and the backup is restored if the new launcher does not confirm startup. Update failures never block normal server use.
 
@@ -431,6 +431,6 @@ Only mappings created by the current launcher session and still matching the rec
 
 ## Current local build
 
-- Product version: `0.3.0`
-- Build number: `26.2.45.24`
+- Product version: `0.3.1`
+- Build number: `26.2.45.25`
 - File name: `Minecraft-Server-Launcher.exe`

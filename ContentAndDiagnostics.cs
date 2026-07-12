@@ -132,7 +132,7 @@ internal static partial class Launcher
 			contentSplit.SplitterDistance = 610;
 			root.Controls.Add(contentSplit, 0, 2);
 
-			resultList = new ListView();
+			resultList = new BufferedListView();
 			resultList.Dock = DockStyle.Fill;
 			resultList.View = View.Details;
 			resultList.FullRowSelect = true;
@@ -196,6 +196,7 @@ internal static partial class Launcher
 			openFolderButton.Click += delegate { OpenContentFolder(); };
 			actions.Controls.Add(openFolderButton);
 			installButton = NewContentButton(korean ? "선택 항목 설치" : "Install selected", 148);
+			installButton.Tag = "primary";
 			installButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 			installButton.Enabled = false;
 			installButton.Location = new Point(actions.Width - 148, 5);
@@ -218,6 +219,10 @@ internal static partial class Launcher
 				}
 			};
 			ApplySimpleDialogTheme(this);
+			AcceptButton = searchButton;
+			ConfigureAccessibleField(searchBox, korean ? "콘텐츠 검색" : "Content search", korean ? "플러그인 또는 모드 이름을 입력하세요." : "Enter a plugin or mod name.");
+			ConfigureAccessibleField(resultList, korean ? "검색 결과" : "Search results", korean ? "항목을 선택하면 오른쪽에서 설명을 확인할 수 있습니다." : "Select an item to review its details on the right.");
+			projectIcon.AccessibleName = korean ? "선택한 콘텐츠 아이콘" : "Selected content icon";
 			ApplyCommonButtonToolTips(this);
 		}
 
@@ -434,8 +439,7 @@ internal static partial class Launcher
 				{
 					TryPostToUi(this, (MethodInvoker)delegate
 					{
-						SetBusy(false, (IsKoreanContent() ? "설치 실패: " : "Installation failed: ") + exception.Message);
-						MessageBox.Show(this, exception.Message, IsKoreanContent() ? "설치 실패" : "Installation failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+						SetBusy(false, (IsKoreanContent() ? "설치하지 못했습니다. 다시 시도해 주세요: " : "Installation failed. Try again: ") + exception.Message);
 					});
 				}
 			});
@@ -452,6 +456,8 @@ internal static partial class Launcher
 			openFolderButton.Enabled = !value;
 			installButton.Enabled = !value && resultList.SelectedIndices.Count == 1;
 			statusLabel.Text = status;
+			statusLabel.AccessibleName = status;
+			UseWaitCursor = value;
 		}
 
 		private bool IsKoreanContent()

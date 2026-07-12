@@ -31,6 +31,7 @@ internal static class LauncherTests
 			TestMockedDownload(temporary);
 			TestDataLocations(temporary);
 			TestSetupLayoutAndValidation();
+			TestUxAccessibility();
 			TestJavaSelection();
 			TestBackupRestoreAndProfileCopy(temporary);
 			TestUpnpOwnershipRules();
@@ -83,12 +84,12 @@ internal static class LauncherTests
 	private static void TestUpdateMetadataParsing()
 	{
 		string hash = new string('a', 64);
-		string json = "{\"version\":\"0.3.1\",\"build\":\"26.2.45.25\",\"download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v26.2.45.25/Minecraft-Server-Launcher.exe\",\"sha256\":\"" + hash + "\",\"size\":2097152,\"release_notes\":\"test\",\"minimum_supported_version\":\"0.1.0\"}";
+		string json = "{\"version\":\"0.3.2\",\"build\":\"26.2.45.26\",\"download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.3.2/Minecraft-Server-Launcher.exe\",\"sha256\":\"" + hash + "\",\"size\":2097152,\"release_notes\":\"test\",\"minimum_supported_version\":\"0.1.0\"}";
 		object metadata = Invoke("ParseLauncherUpdateMetadata", new object[] { json });
-		Equal("0.3.1", Convert.ToString(GetField(metadata, "ProductVersion")), "업데이트 제품 버전");
-		Equal("26.2.45.25", Convert.ToString(GetField(metadata, "BuildNumber")), "업데이트 빌드");
-		Equal(true, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.3.0", "26.2.45.24" }), "새 제품 버전 판별");
-		Equal(false, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.3.1", "26.2.45.25" }), "최신 버전 판별");
+		Equal("0.3.2", Convert.ToString(GetField(metadata, "ProductVersion")), "업데이트 제품 버전");
+		Equal("26.2.45.26", Convert.ToString(GetField(metadata, "BuildNumber")), "업데이트 빌드");
+		Equal(true, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.3.1", "26.2.45.25" }), "새 제품 버전 판별");
+		Equal(false, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.3.2", "26.2.45.26" }), "최신 버전 판별");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { "{}" }); }, "누락된 업데이트 메타데이터");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { json.Replace(hash, "bad") }); }, "잘못된 업데이트 해시");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { json.Replace("https://github.com/Mangom72/", "http://example.com/") }); }, "허용되지 않은 업데이트 주소");
@@ -229,11 +230,15 @@ internal static class LauncherTests
 			Panel body = null;
 			foreach (Control control in form.Controls) if (control is Panel && ((Panel)control).AutoScroll) body = (Panel)control;
 			if (body == null || body.AutoScrollMinSize.Height < 700) throw new InvalidOperationException("작은 화면 스크롤 영역이 없습니다.");
+			Equal(0, body.AutoScrollMinSize.Width, "설정 화면 가로 스크롤 방지");
 			NumericUpDown port = (NumericUpDown)GetPrivateField(formType, form, "portBox");
 			NumericUpDown memory = (NumericUpDown)GetPrivateField(formType, form, "memoryBox");
 			Equal(1m, port.Minimum, "포트 최소값");
 			Equal(65535m, port.Maximum, "포트 최대값");
 			Equal(2m, memory.Minimum, "메모리 최소값");
+			if (string.IsNullOrEmpty(port.AccessibleName)) throw new InvalidOperationException("포트 입력의 접근성 이름이 없습니다.");
+			Label validation = (Label)GetPrivateField(formType, form, "validationLabel");
+			Equal(AccessibleRole.Alert, validation.AccessibleRole, "설정 오류 접근성 역할");
 
 			ComboBox serverType = (ComboBox)GetPrivateField(formType, form, "serverTypeBox");
 			serverType.SelectedIndex = serverType.Items.Count - 1;
@@ -252,6 +257,45 @@ internal static class LauncherTests
 			Equal("1.20.1", Convert.ToString(version.SelectedItem), "백그라운드 버전 선택 유지");
 		}
 		Pass();
+	}
+
+	private static void TestUxAccessibility()
+	{
+		Type paletteType = launcher.GetNestedType("ThemePalette", BindingFlags.NonPublic);
+		object palette = paletteType.GetMethod("Create", BindingFlags.Static | BindingFlags.Public).Invoke(null, new object[] { false });
+		Color window = (Color)paletteType.GetField("Window", BindingFlags.Instance | BindingFlags.Public).GetValue(palette);
+		Color muted = (Color)paletteType.GetField("Muted", BindingFlags.Instance | BindingFlags.Public).GetValue(palette);
+		if (ContrastRatio(window, muted) < 4.5) throw new InvalidOperationException("라이트 모드 보조 텍스트 대비가 4.5:1보다 낮습니다.");
+
+		Type buttonType = launcher.GetNestedType("RoundedButton", BindingFlags.NonPublic);
+		using (Button button = (Button)Activator.CreateInstance(buttonType, true))
+		{
+			button.Enabled = false;
+			Equal(Cursors.Default, button.Cursor, "비활성 버튼 커서");
+		}
+		string startDescription = Convert.ToString(Invoke("GetCommonButtonDescription", new object[] { "서버 시작하기" }));
+		if (startDescription.IndexOf("F5", StringComparison.OrdinalIgnoreCase) < 0) throw new InvalidOperationException("시작 단축키 안내가 없습니다.");
+		Pass();
+	}
+
+	private static double ContrastRatio(Color first, Color second)
+	{
+		double lighter = Math.Max(RelativeLuminance(first), RelativeLuminance(second));
+		double darker = Math.Min(RelativeLuminance(first), RelativeLuminance(second));
+		return (lighter + 0.05) / (darker + 0.05);
+	}
+
+	private static double RelativeLuminance(Color color)
+	{
+		double red = LinearChannel(color.R / 255.0);
+		double green = LinearChannel(color.G / 255.0);
+		double blue = LinearChannel(color.B / 255.0);
+		return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+	}
+
+	private static double LinearChannel(double value)
+	{
+		return value <= 0.03928 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
 	}
 
 	private static void TestJavaSelection()

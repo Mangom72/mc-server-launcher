@@ -99,6 +99,7 @@ internal static partial class Launcher
 			Size = new Size(1080, 720);
 			Font = new Font("Segoe UI Variable Text", 9.5F);
 			AutoScaleMode = AutoScaleMode.Dpi;
+			KeyPreview = true;
 
 			TableLayoutPanel root = new TableLayoutPanel();
 			root.Dock = DockStyle.Fill;
@@ -127,7 +128,7 @@ internal static partial class Launcher
 			hint.Location = new Point(2, 38);
 			header.Controls.Add(hint);
 
-			serverList = new ListView();
+			serverList = new BufferedListView();
 			serverList.Dock = DockStyle.Fill;
 			serverList.View = View.Details;
 			serverList.FullRowSelect = true;
@@ -207,7 +208,28 @@ internal static partial class Launcher
 			FormClosing += OnDashboardClosing;
 			FormClosed += delegate { refreshTimer.Stop(); };
 			ApplySimpleDialogTheme(this);
+			ConfigureAccessibleField(serverList, korean ? "서버 목록" : "Server list", korean ? "상태, 버전, 포트와 접속 주소를 확인하고 서버를 선택합니다." : "Review status, version, port, and address, then select a server.");
 			ApplyCommonButtonToolTips(this);
+		}
+
+		protected override bool ProcessCmdKey(ref Message message, Keys keyData)
+		{
+			if (keyData == Keys.F5)
+			{
+				ReloadProfiles();
+				return true;
+			}
+			if (keyData == (Keys.Control | Keys.N) && createButton.Enabled)
+			{
+				RunProfileAction(CreateProfile);
+				return true;
+			}
+			if (keyData == Keys.Enter && serverList.Focused && consoleButton.Enabled)
+			{
+				OpenSelectedConsole();
+				return true;
+			}
+			return base.ProcessCmdKey(ref message, keyData);
 		}
 
 		public static Button NewManagedButton(string text, int width, string role)
@@ -225,12 +247,21 @@ internal static partial class Launcher
 		private void ReloadProfiles()
 		{
 			string selected = GetSelectedProfileName();
+			if (string.IsNullOrEmpty(selected))
+			{
+				selected = ReadActiveProfileName(serversRoot);
+			}
 			profiles.Clear();
 			profiles.AddRange(ReadManagedProfiles(serversRoot));
 			RenderProfiles();
 			if (!string.IsNullOrEmpty(selected))
 			{
 				SelectProfile(selected);
+			}
+			if (serverList.SelectedIndices.Count == 0 && serverList.Items.Count > 0)
+			{
+				serverList.Items[0].Selected = true;
+				serverList.Items[0].Focused = true;
 			}
 		}
 
@@ -241,7 +272,10 @@ internal static partial class Launcher
 			serverList.BeginUpdate();
 			try
 			{
-				serverList.Items.Clear();
+				while (serverList.Items.Count > profiles.Count)
+				{
+					serverList.Items.RemoveAt(serverList.Items.Count - 1);
+				}
 				for (int i = 0; i < profiles.Count; i++)
 				{
 					ManagedProfileRecord profile = profiles[i];
@@ -266,16 +300,26 @@ internal static partial class Launcher
 						}
 					}
 					string displayName = string.Equals(profile.Name, active, StringComparison.OrdinalIgnoreCase) ? "★ " + profile.Name : profile.Name;
-					ListViewItem item = new ListViewItem(displayName);
-					item.SubItems.Add(status);
-					item.SubItems.Add(GetServerTypeDisplayName(profile.ServerType));
-					item.SubItems.Add(profile.MinecraftVersion);
-					item.SubItems.Add(profile.Port.ToString(CultureInfo.InvariantCulture));
-					item.SubItems.Add(profile.MemoryGb.ToString(CultureInfo.InvariantCulture) + " GB");
-					item.SubItems.Add(players.ToString(CultureInfo.InvariantCulture));
-					item.SubItems.Add(address);
-					item.Tag = profile.Name;
-					serverList.Items.Add(item);
+					ListViewItem item = i < serverList.Items.Count ? serverList.Items[i] : null;
+					if (item == null || !string.Equals(Convert.ToString(item.Tag), profile.Name, StringComparison.OrdinalIgnoreCase))
+					{
+						if (item != null)
+						{
+							serverList.Items.RemoveAt(i);
+						}
+						item = new ListViewItem();
+						item.Tag = profile.Name;
+						serverList.Items.Insert(i, item);
+					}
+					while (item.SubItems.Count < 8) item.SubItems.Add(string.Empty);
+					item.Text = displayName;
+					item.SubItems[1].Text = status;
+					item.SubItems[2].Text = GetServerTypeDisplayName(profile.ServerType);
+					item.SubItems[3].Text = profile.MinecraftVersion;
+					item.SubItems[4].Text = profile.Port.ToString(CultureInfo.InvariantCulture);
+					item.SubItems[5].Text = profile.MemoryGb.ToString(CultureInfo.InvariantCulture) + " GB";
+					item.SubItems[6].Text = players.ToString(CultureInfo.InvariantCulture);
+					item.SubItems[7].Text = address;
 				}
 			}
 			finally
@@ -299,11 +343,16 @@ internal static partial class Launcher
 			summaryLabel.Text = IsManagedKorean()
 				? "실행 중 " + runningCount + "개 · 할당 메모리 " + assignedMemory + "GB / 시스템 " + GetTotalPhysicalMemoryGb() + "GB"
 				: runningCount + " running · " + assignedMemory + "GB allocated / " + GetTotalPhysicalMemoryGb() + "GB system";
+			if (profiles.Count == 0)
+			{
+				summaryLabel.Text = ManagedText("서버가 없습니다. 새 서버를 눌러 시작하세요.", "No servers yet. Select New to get started.");
+			}
 			if (mainServerBusy)
 			{
 				summaryLabel.Text += ManagedText(" · 메인 서버 종료 후 프로필 변경 가능", " · stop the main server to edit profiles");
 			}
 			UpdateActions();
+			summaryLabel.AccessibleName = summaryLabel.Text;
 		}
 
 		private void RunProfileAction(Action action)

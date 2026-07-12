@@ -85,7 +85,7 @@ internal static partial class Launcher
 				retentionLabel.Left = retentionBox.Left - retentionLabel.Width - 12;
 			};
 
-			backupList = new ListView();
+			backupList = new BufferedListView();
 			backupList.Dock = DockStyle.Fill;
 			backupList.View = View.Details;
 			backupList.FullRowSelect = true;
@@ -359,7 +359,7 @@ internal static partial class Launcher
 			heading.Dock = DockStyle.Fill;
 			root.Controls.Add(heading, 0, 0);
 
-			profileList = new ListView();
+			profileList = new BufferedListView();
 			profileList.Dock = DockStyle.Fill;
 			profileList.View = View.Details;
 			profileList.FullRowSelect = true;
