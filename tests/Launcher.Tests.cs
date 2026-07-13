@@ -95,12 +95,12 @@ internal static class LauncherTests
 	private static void TestUpdateMetadataParsing()
 	{
 		string hash = new string('a', 64);
-		string json = "{\"version\":\"0.4.1\",\"build\":\"26.2.45.29\",\"download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.1/Minecraft-Server-Launcher.exe\",\"sha256\":\"" + hash + "\",\"size\":2097152,\"release_notes\":\"test\",\"minimum_supported_version\":\"0.1.0\"}";
+		string json = "{\"version\":\"0.4.2\",\"build\":\"26.2.45.30\",\"download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/Minecraft-Server-Launcher.exe\",\"sha256\":\"" + hash + "\",\"size\":2097152,\"release_notes\":\"test\",\"minimum_supported_version\":\"0.1.0\"}";
 		object metadata = Invoke("ParseLauncherUpdateMetadata", new object[] { json });
-		Equal("0.4.1", Convert.ToString(GetField(metadata, "ProductVersion")), "업데이트 제품 버전");
-		Equal("26.2.45.29", Convert.ToString(GetField(metadata, "BuildNumber")), "업데이트 빌드");
-		Equal(true, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.4.0", "26.2.45.28" }), "새 제품 버전 판별");
-		Equal(false, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.4.1", "26.2.45.29" }), "최신 버전 판별");
+		Equal("0.4.2", Convert.ToString(GetField(metadata, "ProductVersion")), "업데이트 제품 버전");
+		Equal("26.2.45.30", Convert.ToString(GetField(metadata, "BuildNumber")), "업데이트 빌드");
+		Equal(true, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.4.1", "26.2.45.29" }), "새 제품 버전 판별");
+		Equal(false, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.4.2", "26.2.45.30" }), "최신 버전 판별");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { "{}" }); }, "누락된 업데이트 메타데이터");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { json.Replace(hash, "bad") }); }, "잘못된 업데이트 해시");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { json.Replace("https://github.com/Mangom72/", "http://example.com/") }); }, "허용되지 않은 업데이트 주소");
@@ -295,6 +295,33 @@ internal static class LauncherTests
 			object play = Enum.Parse(iconType, "Play");
 			iconProperty.SetValue(button, play, null);
 			Equal("Play", Convert.ToString(iconProperty.GetValue(button, null)), "버튼 벡터 아이콘 상태");
+		}
+		MethodInfo ensureButtonContentFits = launcher.GetMethod("EnsureButtonContentFits", BindingFlags.Static | BindingFlags.NonPublic);
+		Type managedIconType = launcher.GetNestedType("ButtonIcon", BindingFlags.NonPublic);
+		PropertyInfo managedIconProperty = buttonType.GetProperty("IconKind", BindingFlags.Instance | BindingFlags.Public);
+		object managedIcon = Enum.Parse(managedIconType, "Server");
+		string[][] managementLabels = new string[][]
+		{
+			new string[] { "시작", "안전 종료", "콘솔", "새 서버", "복제", "가져오기", "이름 변경", "보관", "기본 서버로", "새로고침", "이 서버 선택" },
+			new string[] { "Start", "Stop safely", "Console", "New", "Clone", "Import", "Rename", "Archive", "Set active", "Refresh" }
+		};
+		foreach (string[] labels in managementLabels)
+		{
+			foreach (string label in labels)
+			{
+				using (Button button = (Button)Activator.CreateInstance(buttonType, true))
+				{
+					button.Text = label;
+					button.Width = 86;
+					button.Height = 40;
+					button.Font = new Font("Segoe UI Variable Text", 9.5F);
+					managedIconProperty.SetValue(button, managedIcon, null);
+					ensureButtonContentFits.Invoke(null, new object[] { button });
+					Size measured = TextRenderer.MeasureText(button.Text, button.Font, new Size(4096, button.Height), TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+					if (measured.Width + 46 > button.Width) throw new InvalidOperationException("서버 관리 버튼 문구가 잘립니다: " + label);
+					if (button.MinimumSize.Width < measured.Width + 46) throw new InvalidOperationException("서버 관리 버튼 최소 폭이 보존되지 않습니다: " + label);
+				}
+			}
 		}
 		string startDescription = Convert.ToString(Invoke("GetCommonButtonDescription", new object[] { "서버 시작" }));
 		if (startDescription.IndexOf("F5", StringComparison.OrdinalIgnoreCase) < 0) throw new InvalidOperationException("시작 단축키 안내가 없습니다.");

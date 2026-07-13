@@ -212,6 +212,26 @@ internal static partial class Launcher
 		}
 	}
 
+	private static void EnsureButtonContentFits(Button button)
+	{
+		if (button == null)
+		{
+			return;
+		}
+		RoundedButton roundedButton = button as RoundedButton;
+		bool hasIcon = roundedButton != null && roundedButton.IconKind != ButtonIcon.None;
+		Size measured = TextRenderer.MeasureText(button.Text ?? string.Empty, button.Font, new Size(4096, Math.Max(1, button.Height)), TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+		int requiredWidth = measured.Width + (hasIcon ? 46 : 24);
+		if (button.Width < requiredWidth)
+		{
+			button.Width = requiredWidth;
+		}
+		if (button.MinimumSize.Width < requiredWidth)
+		{
+			button.MinimumSize = new Size(requiredWidth, button.MinimumSize.Height);
+		}
+	}
+
 	private static string GetCommonButtonDescription(string text)
 	{
 		string value = (text ?? string.Empty).Replace("&", string.Empty).Trim().ToLowerInvariant();

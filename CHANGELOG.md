@@ -2,6 +2,16 @@
 
 이 프로젝트는 제품 버전에 [Semantic Versioning](https://semver.org/)을 사용합니다. `26.2.45.xx` 값은 별도의 내부 빌드 번호입니다.
 
+## [0.4.1] - 2026-07-13
+
+내부 빌드: `26.2.45.29`
+
+### Fixed
+
+- 서버 관리 화면의 아이콘과 번역 문구를 실제 글꼴 기준으로 측정해 버튼 글자가 잘리거나 말줄임표로 표시되던 문제 수정
+- 상단 실행 버튼을 앞 버튼의 실제 폭에 맞춰 배치하고 프로필 관리의 긴 가져오기 문구를 간결하게 통일
+- 한국어·영어 서버 관리 버튼의 최소 표시 폭을 확인하는 자동 회귀 테스트 추가
+
 ## [0.4.0] - 2026-07-13
 
 내부 빌드: `26.2.45.28`
@@ -107,6 +117,8 @@
 - 기존 `Minecraft-Servers-Data` 자동 감지 및 비파괴 사용
 
 ## English
+
+Version `0.4.1` prevents Korean and English labels from being clipped inside server-management buttons by measuring icon and text space, aligning adjacent actions from their actual bounds, and adding regression coverage for every management label.
 
 Version `0.4.0` adds built-in and user quick commands, cursor-aware local completion, command history and safety confirmation, plus an optional loopback-only Paper/Purpur bridge for live command metadata, console tab completion, and online players. Bridge installation requires per-profile consent, verifies release metadata and SHA-256, never executes commands, and preserves user data on removal.
 

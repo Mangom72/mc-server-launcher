@@ -397,7 +397,7 @@ internal static partial class Launcher
 			ApplyButtonIcon(clone, ButtonIcon.Copy);
 			clone.Click += delegate { RunProfileAction(CloneProfile); };
 			actions.Controls.Add(clone);
-			Button import = NewProfileButton(korean ? "기존 서버 가져오기" : "Import server", 132, "secondary");
+			Button import = NewProfileButton(korean ? "가져오기" : "Import", 132, "secondary");
 			ApplyButtonIcon(import, ButtonIcon.Download);
 			import.Click += delegate { RunProfileAction(ImportProfile); };
 			actions.Controls.Add(import);
@@ -413,6 +413,11 @@ internal static partial class Launcher
 			ApplyButtonIcon(activate, ButtonIcon.Check);
 			activate.Click += delegate { RunProfileAction(ActivateProfile); };
 			actions.Controls.Add(activate);
+
+			foreach (Control control in actions.Controls)
+			{
+				EnsureButtonContentFits(control as Button);
+			}
 
 			Shown += delegate { ReloadProfiles(); };
 			ApplySimpleDialogTheme(this);

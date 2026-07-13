@@ -20,7 +20,7 @@ foreach ($path in @($portable, $zip, $setup, $bridge)) {
 
 $portableInfo = Get-Item -LiteralPath $portable
 $portableHash = (Get-FileHash -LiteralPath $portable -Algorithm SHA256).Hash.ToLowerInvariant()
-$notes = "Adds quick commands, cursor-aware local autocomplete, user command templates, and an optional loopback-only Paper/Purpur live command bridge."
+$notes = "Fixes clipped Korean and English labels in server-management buttons while preserving compact, single-row layouts."
 $bridgeInfo = Get-Item -LiteralPath $bridge
 $bridgeHash = (Get-FileHash -LiteralPath $bridge -Algorithm SHA256).Hash.ToLowerInvariant()
 $metadata = [ordered]@{
@@ -77,6 +77,7 @@ $releaseNotes = @"
 
 ### UX 개선
 
+- 서버 관리 버튼이 아이콘과 실제 글꼴에 필요한 최소 폭을 유지해 한국어·영어 문구가 잘리지 않습니다.
 - 메인 작업 버튼이 창 너비에 맞게 정렬되며, 콘솔을 닫았을 때 불필요한 빈 공간을 줄였습니다.
 - 라이트·다크·Windows 고대비 모드의 텍스트 대비와 키보드 포커스 표시를 개선했습니다.
 - 설정 입력 오류를 관련 필드에서 바로 안내하고 불필요한 가로 스크롤과 중복 팝업을 제거했습니다.
