@@ -127,14 +127,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { 'v${{ steps.version.outputs.product }}' }
-          gh release create $tag `
-            (Join-Path $env:ARTIFACTS 'MineHarbor.exe') `
-            (Join-Path $env:ARTIFACTS 'Minecraft-Server-Launcher.exe') `
-            (Join-Path $env:ARTIFACTS 'MineHarbor-Portable-v${{ steps.version.outputs.product }}.zip') `
-            (Join-Path $env:ARTIFACTS 'MineHarbor-Setup-v${{ steps.version.outputs.product }}.exe') `
-            (Join-Path $env:ARTIFACTS 'MineHarbor-Command-Bridge-Paper-v${{ steps.version.outputs.product }}.jar') `
-            (Join-Path $env:ARTIFACTS 'SHA256SUMS.txt') `
-            (Join-Path $env:ARTIFACTS 'update.json') `
-            --title 'MineHarbor — Minecraft Server Launcher v${{ steps.version.outputs.product }} (build ${{ steps.version.outputs.build }})' `
-            --notes-file (Join-Path $env:ARTIFACTS 'release-notes.md') `
-            --latest
+          $title = 'MineHarbor — Minecraft Server Launcher v${{ steps.version.outputs.product }} (build ${{ steps.version.outputs.build }})'
+          $notes = Join-Path $env:ARTIFACTS 'release-notes.md'
+          $assets = @(
+            (Join-Path $env:ARTIFACTS 'MineHarbor.exe')
+            (Join-Path $env:ARTIFACTS 'Minecraft-Server-Launcher.exe')
+            (Join-Path $env:ARTIFACTS 'MineHarbor-Portable-v${{ steps.version.outputs.product }}.zip')
+            (Join-Path $env:ARTIFACTS 'MineHarbor-Setup-v${{ steps.version.outputs.product }}.exe')
+            (Join-Path $env:ARTIFACTS 'MineHarbor-Command-Bridge-Paper-v${{ steps.version.outputs.product }}.jar')
+            (Join-Path $env:ARTIFACTS 'SHA256SUMS.txt')
+            (Join-Path $env:ARTIFACTS 'update.json')
+          )
+          $existingTags = gh release list --limit 100 --json tagName | ConvertFrom-Json
+          $releaseExists = @($existingTags | Where-Object { $_.tagName -eq $tag }).Count -gt 0
+          if ($releaseExists) {
+            gh release edit $tag --title $title --notes-file $notes --latest
+            gh release upload $tag $assets --clobber
+          }
+          else {
+            gh release create $tag $assets --title $title --notes-file $notes --latest
+          }
