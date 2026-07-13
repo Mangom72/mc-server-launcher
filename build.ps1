@@ -18,7 +18,8 @@ if (!$SkipCompile -and !$SkipDependencyDownload) {
 }
 $javaZip = Join-Path $dependencyDirectory 'Paper26_2.java25.zip'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
-$portableExe = Join-Path $output 'Minecraft-Server-Launcher.exe'
+$portableExe = Join-Path $output 'MineHarbor.exe'
+$legacyPortableExe = Join-Path $output 'Minecraft-Server-Launcher.exe'
 $sources = @(
     'decompiled\Launcher.decompiled.cs',
     'AssemblyInfo.cs',
@@ -60,6 +61,9 @@ elseif (!(Test-Path -LiteralPath $portableExe)) {
     throw "Portable EXE does not exist for -SkipCompile: $portableExe"
 }
 
+# 기존 런처가 새 브랜드 버전을 자동 업데이트할 수 있도록 같은 바이너리의 예전 자산 이름을 함께 제공합니다.
+Copy-Item -LiteralPath $portableExe -Destination $legacyPortableExe -Force
+
 $packageRoot = Join-Path $projectRoot 'obj\portable'
 Remove-Item -LiteralPath $packageRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
@@ -68,7 +72,7 @@ foreach ($document in @('README.md', 'LICENSE', 'PRIVACY.md')) {
     $source = Join-Path $projectRoot $document
     if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination $packageRoot }
 }
-$portableZip = Join-Path $output ("Minecraft-Server-Launcher-Portable-v{0}.zip" -f $version.productVersion)
+$portableZip = Join-Path $output ("MineHarbor-Portable-v{0}.zip" -f $version.productVersion)
 Remove-Item -LiteralPath $portableZip -Force -ErrorAction SilentlyContinue
 Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath $portableZip -CompressionLevel Optimal
 
@@ -83,15 +87,16 @@ if ($BuildInstaller) {
     }
     $marker = Join-Path $projectRoot 'obj\installed.mode'
     [IO.File]::WriteAllText($marker, "installed`r`n", [Text.UTF8Encoding]::new($false))
-    & $InnoCompiler "/DMyAppVersion=$($version.productVersion)" "/DMyBuildNumber=$($version.buildNumber)" "/DSourceExe=$portableExe" "/DProjectRoot=$projectRoot" "/DOutputDir=$output" (Join-Path $projectRoot 'installer\MinecraftServerLauncher.iss')
+    & $InnoCompiler "/DMyAppVersion=$($version.productVersion)" "/DMyBuildNumber=$($version.buildNumber)" "/DSourceExe=$portableExe" "/DProjectRoot=$projectRoot" "/DOutputDir=$output" (Join-Path $projectRoot 'installer\MineHarbor.iss')
     if ($LASTEXITCODE -ne 0) { throw "Installer build failed with exit code $LASTEXITCODE." }
-    $setupPath = Join-Path $output ("Minecraft-Server-Launcher-Setup-v{0}.exe" -f $version.productVersion)
+    $setupPath = Join-Path $output ("MineHarbor-Setup-v{0}.exe" -f $version.productVersion)
 }
 
 [pscustomobject]@{
     ProductVersion = $version.productVersion
     BuildNumber = $version.buildNumber
     PortableExe = $portableExe
+	LegacyPortableExe = $legacyPortableExe
     PortableZip = $portableZip
     SetupExe = $setupPath
 	CommandBridgeJar = if ($bridgeBuild) { $bridgeBuild.Jar } else { $null }

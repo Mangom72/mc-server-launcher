@@ -52,7 +52,7 @@ jobs:
 
       - name: Run tests
         shell: pwsh
-        run: .\test.ps1 -LauncherPath (Join-Path $env:ARTIFACTS 'Minecraft-Server-Launcher.exe')
+        run: .\test.ps1 -LauncherPath (Join-Path $env:ARTIFACTS 'MineHarbor.exe')
 
       - name: Optionally sign Portable EXE
         if: ${{ env.SIGNING_CERTIFICATE != '' }}
@@ -64,7 +64,7 @@ jobs:
           $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -Match '\\x64\\' | Select-Object -First 1 -ExpandProperty FullName
-          & $signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $pfx /p $env:WINDOWS_CERTIFICATE_PASSWORD (Join-Path $env:ARTIFACTS 'Minecraft-Server-Launcher.exe')
+          & $signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $pfx /p $env:WINDOWS_CERTIFICATE_PASSWORD (Join-Path $env:ARTIFACTS 'MineHarbor.exe')
           if ($LASTEXITCODE -ne 0) { throw 'Portable signing failed.' }
 
       - name: Install pinned Inno Setup
@@ -92,7 +92,7 @@ jobs:
           $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
           if (!(Test-Path $pfx)) { [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)) }
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -Match '\\x64\\' | Select-Object -First 1 -ExpandProperty FullName
-          $setup = Join-Path $env:ARTIFACTS 'Minecraft-Server-Launcher-Setup-v${{ steps.version.outputs.product }}.exe'
+          $setup = Join-Path $env:ARTIFACTS 'MineHarbor-Setup-v${{ steps.version.outputs.product }}.exe'
           & $signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $pfx /p $env:WINDOWS_CERTIFICATE_PASSWORD $setup
           if ($LASTEXITCODE -ne 0) { throw 'Installer signing failed.' }
 
@@ -110,12 +110,13 @@ jobs:
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: minecraft-server-launcher-v${{ steps.version.outputs.product }}
+          name: mineharbor-v${{ steps.version.outputs.product }}
           path: |
+            ${{ env.ARTIFACTS }}\MineHarbor.exe
             ${{ env.ARTIFACTS }}\Minecraft-Server-Launcher.exe
-            ${{ env.ARTIFACTS }}\Minecraft-Server-Launcher-Portable-v${{ steps.version.outputs.product }}.zip
-            ${{ env.ARTIFACTS }}\Minecraft-Server-Launcher-Setup-v${{ steps.version.outputs.product }}.exe
-            ${{ env.ARTIFACTS }}\Minecraft-Server-Launcher-Command-Bridge-Paper-v${{ steps.version.outputs.product }}.jar
+            ${{ env.ARTIFACTS }}\MineHarbor-Portable-v${{ steps.version.outputs.product }}.zip
+            ${{ env.ARTIFACTS }}\MineHarbor-Setup-v${{ steps.version.outputs.product }}.exe
+            ${{ env.ARTIFACTS }}\MineHarbor-Command-Bridge-Paper-v${{ steps.version.outputs.product }}.jar
             ${{ env.ARTIFACTS }}\SHA256SUMS.txt
             ${{ env.ARTIFACTS }}\update.json
 
@@ -127,12 +128,13 @@ jobs:
         run: |
           $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { 'v${{ steps.version.outputs.product }}' }
           gh release create $tag `
+            (Join-Path $env:ARTIFACTS 'MineHarbor.exe') `
             (Join-Path $env:ARTIFACTS 'Minecraft-Server-Launcher.exe') `
-            (Join-Path $env:ARTIFACTS 'Minecraft-Server-Launcher-Portable-v${{ steps.version.outputs.product }}.zip') `
-            (Join-Path $env:ARTIFACTS 'Minecraft-Server-Launcher-Setup-v${{ steps.version.outputs.product }}.exe') `
-            (Join-Path $env:ARTIFACTS 'Minecraft-Server-Launcher-Command-Bridge-Paper-v${{ steps.version.outputs.product }}.jar') `
+            (Join-Path $env:ARTIFACTS 'MineHarbor-Portable-v${{ steps.version.outputs.product }}.zip') `
+            (Join-Path $env:ARTIFACTS 'MineHarbor-Setup-v${{ steps.version.outputs.product }}.exe') `
+            (Join-Path $env:ARTIFACTS 'MineHarbor-Command-Bridge-Paper-v${{ steps.version.outputs.product }}.jar') `
             (Join-Path $env:ARTIFACTS 'SHA256SUMS.txt') `
             (Join-Path $env:ARTIFACTS 'update.json') `
-            --title 'Minecraft Server Launcher v${{ steps.version.outputs.product }} (build ${{ steps.version.outputs.build }})' `
+            --title 'MineHarbor — Minecraft Server Launcher v${{ steps.version.outputs.product }} (build ${{ steps.version.outputs.build }})' `
             --notes-file (Join-Path $env:ARTIFACTS 'release-notes.md') `
             --latest

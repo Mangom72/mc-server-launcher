@@ -29,7 +29,7 @@ foreach ($name in @('java', 'paperApi', 'adventureApi', 'adventureKey')) {
     $temporary = $target + '.download'
     Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
     Write-Host "Downloading $($item.fileName)"
-    Invoke-WebRequest -Uri $item.url -OutFile $temporary -Headers @{ 'User-Agent' = 'Minecraft-Server-Launcher-Build/0.3' }
+    Invoke-WebRequest -Uri $item.url -OutFile $temporary -Headers @{ 'User-Agent' = 'MineHarbor-Build/0.3' }
     $download = Get-Item -LiteralPath $temporary
     $downloadHash = (Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash
     if ($download.Length -ne [long]$item.size -or !$downloadHash.Equals([string]$item.sha256, [StringComparison]::OrdinalIgnoreCase)) {

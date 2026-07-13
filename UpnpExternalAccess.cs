@@ -283,7 +283,7 @@ internal static partial class Launcher
 			}
 			ReportExternalAccessStatus("UPnP 자동 매핑 중", false);
 			string token = Guid.NewGuid().ToString("N").Substring(0, 12);
-			string description = "Minecraft Server Launcher " + token;
+			string description = "MineHarbor " + token;
 			if (!TryAddSingleUpnpMapping(result, serverPort, serverPort, "TCP", network.LocalIpv4, description, stopped))
 			{
 				return result;

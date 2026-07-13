@@ -902,7 +902,7 @@ internal static partial class Launcher
 
 	private static string GetLauncherIntegrationUserAgent()
 	{
-		return "Minecraft-Server-Launcher/1.6 (+https://github.com/" + GetLauncherReleaseRepositoryPath() + ")";
+		return "MineHarbor/1.6 (+https://github.com/" + GetLauncherReleaseRepositoryPath() + ")";
 	}
 
 	private static string GetJsonString(Dictionary<string, object> dictionary, string key)
@@ -1053,7 +1053,7 @@ internal static partial class Launcher
 	private static string BuildSystemSummary(LauncherOptions options)
 	{
 		StringBuilder builder = new StringBuilder();
-		builder.AppendLine("Minecraft Server Launcher diagnostic summary");
+		builder.AppendLine("MineHarbor — Minecraft Server Launcher diagnostic summary");
 		builder.AppendLine("created-utc=" + DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
 		builder.AppendLine("launcher-product-version=" + BuildVersionInfo.ProductVersion);
 		builder.AppendLine("launcher-build-number=" + BuildVersionInfo.BuildNumber);

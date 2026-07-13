@@ -2,6 +2,17 @@
 
 이 프로젝트는 제품 버전에 [Semantic Versioning](https://semver.org/)을 사용합니다. `26.2.45.xx` 값은 별도의 내부 빌드 번호입니다.
 
+## [1.0.0] - 2026-07-13
+
+내부 빌드: `26.2.45.31`
+
+### Changed
+
+- 제품 표시 이름을 `MineHarbor — Minecraft Server Launcher`로 변경
+- Portable EXE, ZIP, 설치 프로그램과 명령 브리지 릴리스 자산을 `MineHarbor` 이름으로 통일
+- 기존 런처의 자동 업데이트와 `%LOCALAPPDATA%\MinecraftServerLauncher` 서버 데이터를 유지하는 호환 경로 추가
+- Paper/Purpur 플러그인 명령을 플러그인별로 분류하고 빠른 명령 개수 표시 영역 개선
+
 ## [0.4.2] - 2026-07-13
 
 내부 빌드: `26.2.45.30`

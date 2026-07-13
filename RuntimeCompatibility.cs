@@ -64,7 +64,7 @@ internal static partial class Launcher
 	private static readonly object RuntimeCompatibilityMojangCacheLock = new object();
 	private static readonly Dictionary<string, int> RuntimeCompatibilityMojangJavaCache = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-	private const string RuntimeCompatibilityUserAgent = "Minecraft-Server-Launcher/1.6 (runtime-compatibility)";
+	private const string RuntimeCompatibilityUserAgent = "MineHarbor/1.6 (runtime-compatibility)";
 	private const int RuntimeCompatibilityMetadataTimeoutMilliseconds = 15000;
 	private const int RuntimeCompatibilityDownloadTimeoutMilliseconds = 60000;
 	private const long RuntimeCompatibilityMaximumPackageBytes = 1073741824L;

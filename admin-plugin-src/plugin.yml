@@ -3,4 +3,4 @@ version: 2.0.0
 main: local.paper.launcher.OwnerOperatorPlugin
 api-version: '26.2'
 description: 서버 소유자 UUID 기반 자동 OP
-author: Paper Server Launcher
+author: MineHarbor

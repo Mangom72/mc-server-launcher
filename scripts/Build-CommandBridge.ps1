@@ -52,7 +52,7 @@ $pluginText = (Get-Content -LiteralPath $pluginTemplate -Raw).Replace('@VERSION@
 [IO.File]::WriteAllText($pluginOutput, $pluginText, [Text.UTF8Encoding]::new($false))
 
 New-Item -ItemType Directory -Force -Path $output | Out-Null
-$jar = Join-Path $output ("Minecraft-Server-Launcher-Command-Bridge-Paper-v{0}.jar" -f $version.productVersion)
+$jar = Join-Path $output ("MineHarbor-Command-Bridge-Paper-v{0}.jar" -f $version.productVersion)
 Remove-Item -LiteralPath $jar -Force -ErrorAction SilentlyContinue
 $jarTool = Join-Path (Split-Path -Parent $javac) 'jar.exe'
 if (!(Test-Path -LiteralPath $jarTool)) { throw 'Java JAR tool was not found.' }

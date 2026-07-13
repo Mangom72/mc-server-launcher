@@ -11,6 +11,8 @@ internal static partial class Launcher
 	private const string StorageModePortable = "portable";
 	private const string StorageModeCustom = "custom";
 	private const string LauncherUpdateResultFileName = "launcher-update-result.properties";
+	private const string UserDataDirectoryName = "MineHarbor";
+	private const string LegacyUserDataDirectoryName = "MinecraftServerLauncher";
 	// 테스트가 실제 사용자 설정 파일을 건드리지 않도록 경로만 교체하는 내부 지점입니다.
 	private static string StorageSettingsPathOverride = null;
 
@@ -22,7 +24,12 @@ internal static partial class Launcher
 
 	private static string GetLauncherUserDataDirectory()
 	{
-		return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MinecraftServerLauncher");
+		string localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+		string current = Path.Combine(localApplicationData, UserDataDirectoryName);
+		string legacy = Path.Combine(localApplicationData, LegacyUserDataDirectoryName);
+		// 기존 설치의 서버와 설정을 자동 이동하지 않고, 발견한 예전 데이터 폴더를 그대로 사용합니다.
+		if (!Directory.Exists(current) && Directory.Exists(legacy)) return legacy;
+		return current;
 	}
 
 	private static string GetStorageSettingsPath()

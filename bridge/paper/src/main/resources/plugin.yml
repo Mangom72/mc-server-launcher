@@ -3,5 +3,5 @@ version: "@VERSION@"
 main: io.github.mcserverlauncher.bridge.CommandBridgePlugin
 api-version: "1.13"
 load: STARTUP
-description: Local command metadata and suggestion bridge for Minecraft Server Launcher
-author: Minecraft Server Launcher
+description: Local command metadata and suggestion bridge for MineHarbor
+author: MineHarbor

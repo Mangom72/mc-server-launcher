@@ -16,24 +16,24 @@
 
 [Setup]
 AppId={{B855A383-8B1F-46A6-A39E-4C7D529C57C1}
-AppName=Minecraft Server Launcher
+AppName=MineHarbor — Minecraft Server Launcher
 AppVersion={#MyAppVersion}
-AppVerName=Minecraft Server Launcher v{#MyAppVersion} (build {#MyBuildNumber})
+AppVerName=MineHarbor — Minecraft Server Launcher v{#MyAppVersion} (build {#MyBuildNumber})
 AppPublisher=Mangom72
 AppPublisherURL=https://github.com/Mangom72/mc-server-launcher
 AppSupportURL=https://github.com/Mangom72/mc-server-launcher/issues
 AppUpdatesURL=https://github.com/Mangom72/mc-server-launcher/releases/latest
-DefaultDirName={autopf}\Minecraft Server Launcher
-DefaultGroupName=Minecraft Server Launcher
+DefaultDirName={autopf}\MineHarbor
+DefaultGroupName=MineHarbor
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir={#OutputDir}
-OutputBaseFilename=Minecraft-Server-Launcher-Setup-v{#MyAppVersion}
+OutputBaseFilename=MineHarbor-Setup-v{#MyAppVersion}
 SetupIconFile={#ProjectRoot}\launcher-icon.ico
-UninstallDisplayIcon={app}\Minecraft-Server-Launcher.exe
+UninstallDisplayIcon={app}\MineHarbor.exe
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -43,8 +43,8 @@ UsePreviousAppDir=yes
 Uninstallable=yes
 VersionInfoVersion={#MyBuildNumber}
 VersionInfoProductVersion={#MyAppVersion}
-VersionInfoDescription=Minecraft Server Launcher installer
-VersionInfoProductName=Minecraft Server Launcher
+VersionInfoDescription=MineHarbor — Minecraft Server Launcher installer
+VersionInfoProductName=MineHarbor — Minecraft Server Launcher
 LicenseFile={#ProjectRoot}\LICENSE
 
 [Languages]
@@ -55,15 +55,20 @@ Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "Minecraft-Server-Launcher.exe"; Flags: ignoreversion
+Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "MineHarbor.exe"; Flags: ignoreversion
 Source: "{#ProjectRoot}\obj\installed.mode"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectRoot}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectRoot}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectRoot}\PRIVACY.md"; DestDir: "{app}"; Flags: ignoreversion
 
+[InstallDelete]
+Type: files; Name: "{app}\Minecraft-Server-Launcher.exe"
+Type: files; Name: "{autodesktop}\Minecraft Server Launcher.lnk"
+Type: files; Name: "{autoprograms}\Minecraft Server Launcher\Minecraft Server Launcher.lnk"
+
 [Icons]
-Name: "{group}\Minecraft Server Launcher"; Filename: "{app}\Minecraft-Server-Launcher.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\Minecraft Server Launcher"; Filename: "{app}\Minecraft-Server-Launcher.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\MineHarbor"; Filename: "{app}\MineHarbor.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\MineHarbor"; Filename: "{app}\MineHarbor.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\Minecraft-Server-Launcher.exe"; Description: "{cm:LaunchProgram,Minecraft Server Launcher}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\MineHarbor.exe"; Description: "{cm:LaunchProgram,MineHarbor}"; Flags: nowait postinstall skipifsilent

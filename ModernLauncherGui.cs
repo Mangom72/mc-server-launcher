@@ -293,7 +293,7 @@ internal static partial class Launcher
 	{
 		try
 		{
-			SetCurrentProcessExplicitAppUserModelID("PaperServerLauncher.MinecraftServerLauncher");
+			SetCurrentProcessExplicitAppUserModelID("MineHarbor.MinecraftServerLauncher");
 		}
 		catch
 		{
@@ -360,8 +360,8 @@ internal static partial class Launcher
 
 		private static readonly Dictionary<string, string> KoreanTexts = new Dictionary<string, string>
 		{
-			{ "App.Title", "Minecraft 서버 런처" },
-			{ "App.HeaderTitle", "내 마인크래프트 서버" },
+			{ "App.Title", "MineHarbor — Minecraft Server Launcher" },
+			{ "App.HeaderTitle", "내 MineHarbor 서버" },
 			{ "App.Subtitle", "복잡한 설정 없이, 버튼 한 번으로 시작해 보세요" },
 			{ "App.Error", "오류" },
 			{ "Theme.Dark", "다크 모드" },
@@ -504,8 +504,8 @@ internal static partial class Launcher
 
 		private static readonly Dictionary<string, string> EnglishTexts = new Dictionary<string, string>
 		{
-			{ "App.Title", "Minecraft Server Launcher" },
-			{ "App.HeaderTitle", "My Minecraft Server" },
+			{ "App.Title", "MineHarbor — Minecraft Server Launcher" },
+			{ "App.HeaderTitle", "My MineHarbor Server" },
 			{ "App.Subtitle", "Start your server with one button, without the setup noise." },
 			{ "App.Error", "Error" },
 			{ "Theme.Dark", "Dark mode" },

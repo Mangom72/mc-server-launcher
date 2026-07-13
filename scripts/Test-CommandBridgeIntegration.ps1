@@ -51,7 +51,7 @@ try {
 			if (Test-Path -LiteralPath $cacheSource) { Copy-Item -LiteralPath $cacheSource -Destination (Join-Path $temporary $cacheName) -Recurse }
 		}
 	}
-    Copy-Item -LiteralPath $BridgeJar -Destination (Join-Path $temporary 'plugins\Minecraft-Server-Launcher-Command-Bridge-Paper.jar')
+    Copy-Item -LiteralPath $BridgeJar -Destination (Join-Path $temporary 'plugins\MineHarbor-Command-Bridge-Paper.jar')
     [IO.File]::WriteAllText((Join-Path $temporary 'eula.txt'), "eula=true`r`n", [Text.UTF8Encoding]::new($false))
     $properties = "server-port=0`r`nonline-mode=false`r`nmax-players=1`r`nview-distance=2`r`nsimulation-distance=2`r`nlevel-name=bridge-test-world`r`nmotd=Bridge integration test`r`n"
     [IO.File]::WriteAllText((Join-Path $temporary 'server.properties'), $properties, [Text.UTF8Encoding]::new($false))

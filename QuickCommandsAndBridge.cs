@@ -848,7 +848,7 @@ internal static partial class Launcher
 		{
 			BridgeReleaseInfo local = new BridgeReleaseInfo(); local.Version = BuildVersionInfo.ProductVersion; local.Protocol = CommandBridgeProtocolVersion; local.MinimumMinecraft = "1.13"; local.MaximumMinecraft = "26.2"; local.Url = new Uri(Path.GetFullPath(BridgeArtifactOverridePath)).AbsoluteUri; local.Size = new FileInfo(BridgeArtifactOverridePath).Length; local.Sha256 = GetFileSha256(BridgeArtifactOverridePath); return local;
 		}
-		string json = DownloadTextWithUserAgent(GetLauncherUpdateMetadataUrl(), "Minecraft-Server-Launcher/0.4");
+		string json = DownloadTextWithUserAgent(GetLauncherUpdateMetadataUrl(), "MineHarbor/0.4");
 		Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string, object>;
 		Dictionary<string, object> bridge = root != null && root.ContainsKey("bridge") ? root["bridge"] as Dictionary<string, object> : null;
 		if (bridge == null) throw new InvalidDataException("업데이트 정보에 명령 브리지 자산이 없습니다.");
@@ -868,7 +868,7 @@ internal static partial class Launcher
 		Directory.CreateDirectory(Path.GetDirectoryName(destination)); string temporary = destination + ".다운로드중"; string backup = destination + ".이전"; DeleteFileIfPresent(temporary); DeleteFileIfPresent(backup);
 		try
 		{
-			if (!string.IsNullOrEmpty(BridgeArtifactOverridePath) && File.Exists(BridgeArtifactOverridePath)) File.Copy(BridgeArtifactOverridePath, temporary, true); else DownloadFileWithUserAgent(release.Url, temporary, "Minecraft-Server-Launcher/0.4");
+			if (!string.IsNullOrEmpty(BridgeArtifactOverridePath) && File.Exists(BridgeArtifactOverridePath)) File.Copy(BridgeArtifactOverridePath, temporary, true); else DownloadFileWithUserAgent(release.Url, temporary, "MineHarbor/0.4");
 			if (!ValidateCommandBridgeArtifact(temporary, release.Size, release.Sha256)) throw new InvalidDataException("명령 브리지 JAR 크기 또는 SHA-256 검증에 실패했습니다.");
 			if (File.Exists(destination)) File.Copy(destination, backup, true);
 			if (BridgeInstallFailureAfterBackup) throw new IOException("브리지 업데이트 복구 테스트 오류");

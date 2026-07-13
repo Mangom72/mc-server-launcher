@@ -72,6 +72,9 @@ internal static class LauncherTests
 		Equal(true, Version.TryParse(build, out buildVersion), "빌드 번호 형식");
 		if (string.Equals(product, build, StringComparison.Ordinal)) throw new InvalidOperationException("제품 버전과 빌드 번호가 분리되지 않았습니다.");
 		Equal(buildVersion, assembly.GetName().Version, "어셈블리 빌드 번호");
+		object[] productAttributes = assembly.GetCustomAttributes(typeof(AssemblyProductAttribute), false);
+		AssemblyProductAttribute productName = (AssemblyProductAttribute)productAttributes[0];
+		Equal("MineHarbor — Minecraft Server Launcher", productName.Product, "제품 표시 이름");
 		foreach (string resourceName in assembly.GetManifestResourceNames())
 		{
 			if (resourceName.IndexOf("paper.jar", StringComparison.OrdinalIgnoreCase) >= 0) throw new InvalidOperationException("Paper 서버 JAR이 실행 파일에 남아 있습니다.");
@@ -95,10 +98,14 @@ internal static class LauncherTests
 	private static void TestUpdateMetadataParsing()
 	{
 		string hash = new string('a', 64);
-		string json = "{\"version\":\"0.4.2\",\"build\":\"26.2.45.30\",\"download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/Minecraft-Server-Launcher.exe\",\"sha256\":\"" + hash + "\",\"size\":2097152,\"release_notes\":\"test\",\"minimum_supported_version\":\"0.1.0\"}";
+		string json = "{\"version\":\"0.4.2\",\"build\":\"26.2.45.30\",\"download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/Minecraft-Server-Launcher.exe\",\"primary_download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/MineHarbor.exe\",\"sha256\":\"" + hash + "\",\"size\":2097152,\"release_notes\":\"test\",\"minimum_supported_version\":\"0.1.0\"}";
 		object metadata = Invoke("ParseLauncherUpdateMetadata", new object[] { json });
 		Equal("0.4.2", Convert.ToString(GetField(metadata, "ProductVersion")), "업데이트 제품 버전");
 		Equal("26.2.45.30", Convert.ToString(GetField(metadata, "BuildNumber")), "업데이트 빌드");
+		Equal("https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/MineHarbor.exe", Convert.ToString(GetField(metadata, "Url")), "MineHarbor 기본 업데이트 자산");
+		string legacyJson = json.Replace(",\"primary_download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/MineHarbor.exe\"", string.Empty);
+		object legacyMetadata = Invoke("ParseLauncherUpdateMetadata", new object[] { legacyJson });
+		Equal("https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/Minecraft-Server-Launcher.exe", Convert.ToString(GetField(legacyMetadata, "Url")), "기존 업데이트 메타데이터 호환");
 		Equal(true, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.4.1", "26.2.45.29" }), "새 제품 버전 판별");
 		Equal(false, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.4.2", "26.2.45.30" }), "최신 버전 판별");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { "{}" }); }, "누락된 업데이트 메타데이터");
@@ -207,7 +214,7 @@ internal static class LauncherTests
 		Equal(false, Invoke("TryValidateDataRoot", unavailable), "사용 불가능한 경로 차단");
 		string installedDirectory = Path.Combine(root, "installed");
 		Directory.CreateDirectory(installedDirectory);
-		string installedExe = Path.Combine(installedDirectory, "Minecraft-Server-Launcher.exe");
+		string installedExe = Path.Combine(installedDirectory, "MineHarbor.exe");
 		File.WriteAllText(installedExe, "test");
 		File.WriteAllText(Path.Combine(installedDirectory, "installed.mode"), "installed");
 		Equal(true, Invoke("IsInstalledLauncherPath", new object[] { installedExe }), "설치형 경로 식별");

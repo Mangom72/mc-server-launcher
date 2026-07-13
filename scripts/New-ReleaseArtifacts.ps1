@@ -10,23 +10,26 @@ $artifacts = [IO.Path]::GetFullPath($ArtifactsDirectory)
 $version = Get-Content -LiteralPath (Join-Path $projectRoot 'version.json') -Raw | ConvertFrom-Json
 if ([string]::IsNullOrWhiteSpace($ReleaseTag)) { $ReleaseTag = 'v' + $version.productVersion }
 
-$portable = Join-Path $artifacts 'Minecraft-Server-Launcher.exe'
-$zip = Join-Path $artifacts ("Minecraft-Server-Launcher-Portable-v{0}.zip" -f $version.productVersion)
-$setup = Join-Path $artifacts ("Minecraft-Server-Launcher-Setup-v{0}.exe" -f $version.productVersion)
-$bridge = Join-Path $artifacts ("Minecraft-Server-Launcher-Command-Bridge-Paper-v{0}.jar" -f $version.productVersion)
-foreach ($path in @($portable, $zip, $setup, $bridge)) {
+$portable = Join-Path $artifacts 'MineHarbor.exe'
+$legacyPortable = Join-Path $artifacts 'Minecraft-Server-Launcher.exe'
+$zip = Join-Path $artifacts ("MineHarbor-Portable-v{0}.zip" -f $version.productVersion)
+$setup = Join-Path $artifacts ("MineHarbor-Setup-v{0}.exe" -f $version.productVersion)
+$bridge = Join-Path $artifacts ("MineHarbor-Command-Bridge-Paper-v{0}.jar" -f $version.productVersion)
+foreach ($path in @($portable, $legacyPortable, $zip, $setup, $bridge)) {
     if (!(Test-Path -LiteralPath $path)) { throw "Missing release artifact: $path" }
 }
 
 $portableInfo = Get-Item -LiteralPath $portable
 $portableHash = (Get-FileHash -LiteralPath $portable -Algorithm SHA256).Hash.ToLowerInvariant()
-$notes = "Adds a searchable three-level quick-command picker with grouped world actions and theme-aware rounded scrollbars."
+$notes = "Introduces the MineHarbor brand, groups live plugin commands, and improves quick-command counts and documentation."
 $bridgeInfo = Get-Item -LiteralPath $bridge
 $bridgeHash = (Get-FileHash -LiteralPath $bridge -Algorithm SHA256).Hash.ToLowerInvariant()
 $metadata = [ordered]@{
     version = [string]$version.productVersion
     build = [string]$version.buildNumber
+    # 이전 버전은 이 필드를 사용하므로 호환 자산 이름을 유지합니다.
     download_url = "https://github.com/Mangom72/mc-server-launcher/releases/download/$ReleaseTag/Minecraft-Server-Launcher.exe"
+    primary_download_url = "https://github.com/Mangom72/mc-server-launcher/releases/download/$ReleaseTag/MineHarbor.exe"
     sha256 = $portableHash
     size = $portableInfo.Length
     release_notes = $notes
@@ -36,7 +39,7 @@ $metadata = [ordered]@{
 		protocol = 1
 		minimum_minecraft = '1.13'
 		maximum_minecraft = '26.2'
-		download_url = "https://github.com/Mangom72/mc-server-launcher/releases/download/$ReleaseTag/Minecraft-Server-Launcher-Command-Bridge-Paper-v$($version.productVersion).jar"
+		download_url = "https://github.com/Mangom72/mc-server-launcher/releases/download/$ReleaseTag/MineHarbor-Command-Bridge-Paper-v$($version.productVersion).jar"
 		sha256 = $bridgeHash
 		size = $bridgeInfo.Length
 	}
@@ -45,7 +48,7 @@ $updateMetadata = Join-Path $artifacts 'update.json'
 $metadataJson = $metadata | ConvertTo-Json -Depth 5
 [IO.File]::WriteAllText($updateMetadata, $metadataJson, [Text.UTF8Encoding]::new($false))
 
-$files = @($portable, $zip, $setup, $bridge, $updateMetadata)
+$files = @($portable, $legacyPortable, $zip, $setup, $bridge, $updateMetadata)
 $sumLines = foreach ($path in $files) {
     $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
     "$hash  $([IO.Path]::GetFileName($path))"
@@ -53,13 +56,16 @@ $sumLines = foreach ($path in $files) {
 [IO.File]::WriteAllLines((Join-Path $artifacts 'SHA256SUMS.txt'), $sumLines, [Text.UTF8Encoding]::new($false))
 
 $releaseNotes = @"
-## Minecraft Server Launcher v$($version.productVersion)
+## MineHarbor — Minecraft Server Launcher v$($version.productVersion)
 
 제품 버전: **$($version.productVersion)**<br>
 내부 빌드: **$($version.buildNumber)**
 
 ### 주요 변경 사항
 
+- 제품 이름과 실행·설치·Portable·브리지 파일 이름을 MineHarbor로 통일했습니다.
+- 기존 버전의 자동 업데이트가 끊기지 않도록 호환 EXE 자산을 함께 제공합니다.
+- Paper/Purpur 플러그인 명령을 `플러그인 → 플러그인 이름 → 명령어` 구조로 표시합니다.
 - 빠른 명령을 `카테고리 → 기능 → 명령`의 3단 구조로 정리했습니다.
 - 월드 명령은 `월드 → 날씨 → 맑음/비/천둥`, `월드 → 난이도 → 평화로움/쉬움/보통/어려움`처럼 찾을 수 있습니다.
 - 이름, 설명, 계층 경로와 실제 명령어를 한 번에 검색합니다.

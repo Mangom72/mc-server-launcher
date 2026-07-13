@@ -209,7 +209,7 @@ internal static partial class Launcher
 
 	private const string JavaZipSha256 = "709312cd0420296d9b9de917fe6e28a5b979e875ee5ab91783fb79bcd5857235";
 
-	private const string MutexName = "Local\\Paper26_2ServerLauncher";
+	private const string MutexName = "Local\\MineHarbor.MinecraftServerLauncher";
 
 	private const string PaperDownloadPage = "https://papermc.io/downloads/paper";
 
@@ -217,7 +217,7 @@ internal static partial class Launcher
 
 	private const string PaperUserAgent = "Paper-26.2-Server-Launcher/1.3 (local-use; https://docs.papermc.io/)";
 
-	private const string GenericServerUserAgent = "Minecraft-Server-Launcher/1.5";
+	private const string GenericServerUserAgent = "MineHarbor/1.5";
 
 	private const string DefaultProfileName = "기본 서버";
 
@@ -227,11 +227,13 @@ internal static partial class Launcher
 
 	private const string MultiServerRootDirectoryName = "Minecraft-Servers-Data";
 
-	private const string LauncherReleaseAssetName = "Minecraft-Server-Launcher.exe";
+	private const string LauncherReleaseAssetName = "MineHarbor.exe";
 
-	private const string LauncherUpdateUserAgent = "Minecraft-Server-Launcher/1.6";
+	private const string LegacyLauncherReleaseAssetName = "Minecraft-Server-Launcher.exe";
 
-	private const string LauncherUpdateDirectoryName = "Paper26.2LauncherUpdate";
+	private const string LauncherUpdateUserAgent = "MineHarbor/1.6";
+
+	private const string LauncherUpdateDirectoryName = "MineHarborLauncherUpdate";
 
 	private const string LauncherUpdateMetadataAssetName = "update.json";
 
@@ -301,11 +303,11 @@ internal static partial class Launcher
 			return managedExitCode;
 		}
 		bool createdNew;
-		using (Mutex mutex = new Mutex(true, "Local\\Paper26_2ServerLauncher", out createdNew))
+		using (Mutex mutex = new Mutex(true, MutexName, out createdNew))
 		{
 			if (!createdNew)
 			{
-				ShowLauncherMessage("이미 실행 중인 Minecraft 서버 런처가 있습니다.", true);
+				ShowLauncherMessage("이미 실행 중인 MineHarbor가 있습니다.", true);
 				return 1;
 			}
 			try
@@ -342,7 +344,7 @@ internal static partial class Launcher
 		string location = Assembly.GetExecutingAssembly().Location;
 		Console.WriteLine("승인된 런처 업데이트를 내려받는 중...");
 		ReportLauncherLoading(LauncherUiText("새 런처를 내려받고 있습니다…", "Downloading the new launcher…"), 15);
-		string text = Path.Combine(Path.GetTempPath(), "Paper26.2LauncherUpdate");
+		string text = Path.Combine(Path.GetTempPath(), LauncherUpdateDirectoryName);
 		Directory.CreateDirectory(text);
 		string text2 = Path.Combine(text, Guid.NewGuid().ToString("N"));
 		Directory.CreateDirectory(text2);
@@ -495,7 +497,7 @@ internal static partial class Launcher
 		if (root == null) throw new InvalidDataException("업데이트 메타데이터가 JSON 객체가 아닙니다.");
 		string productVersion = root.ContainsKey("version") ? Convert.ToString(root["version"]) : string.Empty;
 		string build = root.ContainsKey("build") ? Convert.ToString(root["build"]) : string.Empty;
-		string url = root.ContainsKey("download_url") ? Convert.ToString(root["download_url"]) : string.Empty;
+		string url = root.ContainsKey("primary_download_url") ? Convert.ToString(root["primary_download_url"]) : root.ContainsKey("download_url") ? Convert.ToString(root["download_url"]) : string.Empty;
 		string sha = root.ContainsKey("sha256") ? Convert.ToString(root["sha256"]) : string.Empty;
 		string notes = root.ContainsKey("release_notes") ? Convert.ToString(root["release_notes"]) : string.Empty;
 		string minimum = root.ContainsKey("minimum_supported_version") ? Convert.ToString(root["minimum_supported_version"]) : string.Empty;
@@ -563,7 +565,7 @@ internal static partial class Launcher
 		foreach (object obj in array3)
 		{
 			Dictionary<string, object> dictionary2 = obj as Dictionary<string, object>;
-			if (dictionary2 != null && dictionary2.ContainsKey("name") && string.Equals(Convert.ToString(dictionary2["name"]), LauncherReleaseAssetName, StringComparison.Ordinal))
+			if (dictionary2 != null && dictionary2.ContainsKey("name") && (string.Equals(Convert.ToString(dictionary2["name"]), LauncherReleaseAssetName, StringComparison.Ordinal) || string.Equals(Convert.ToString(dictionary2["name"]), LegacyLauncherReleaseAssetName, StringComparison.Ordinal)))
 			{
 				string a = (dictionary2.ContainsKey("state") ? Convert.ToString(dictionary2["state"]) : string.Empty);
 				string url = (dictionary2.ContainsKey("browser_download_url") ? Convert.ToString(dictionary2["browser_download_url"]) : string.Empty);
@@ -599,7 +601,7 @@ internal static partial class Launcher
 		string requiredPrefix = "/" + GetLauncherReleaseRepositoryPath() + "/releases/download/";
 		if (Uri.TryCreate(url, UriKind.Absolute, out result) && result.Scheme == Uri.UriSchemeHttps && result.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) && result.AbsolutePath.StartsWith(requiredPrefix, StringComparison.OrdinalIgnoreCase))
 		{
-			return result.AbsolutePath.EndsWith("/" + LauncherReleaseAssetName, StringComparison.OrdinalIgnoreCase);
+			return result.AbsolutePath.EndsWith("/" + LauncherReleaseAssetName, StringComparison.OrdinalIgnoreCase) || result.AbsolutePath.EndsWith("/" + LegacyLauncherReleaseAssetName, StringComparison.OrdinalIgnoreCase);
 		}
 		return false;
 	}
@@ -896,7 +898,7 @@ internal static partial class Launcher
 	{
 		try
 		{
-			string text = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "Paper26.2LauncherUpdate")).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+			string text = Path.GetFullPath(Path.Combine(Path.GetTempPath(), LauncherUpdateDirectoryName)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 			string text2 = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 			return text2.StartsWith(text, StringComparison.OrdinalIgnoreCase) && text2.Length > text.Length;
 		}
@@ -913,7 +915,7 @@ internal static partial class Launcher
 
 	private static int Run()
 	{
-		Console.WriteLine("Minecraft 서버 런처 " + BuildVersionInfo.DisplayVersion);
+		Console.WriteLine("MineHarbor — Minecraft Server Launcher " + BuildVersionInfo.DisplayVersion);
 		Console.WriteLine("제품 버전: v" + BuildVersionInfo.ProductVersion + " · 빌드 번호: " + BuildVersionInfo.BuildNumber);
 		Console.WriteLine("================================");
 		try
@@ -1529,7 +1531,7 @@ internal static partial class Launcher
 
 	private static string[] GetPaperVersionChoices(bool includeSnapshots)
 	{
-		string input = DownloadTextWithUserAgent("https://fill.papermc.io/v3/projects/paper", "Minecraft-Server-Launcher/1.5");
+		string input = DownloadTextWithUserAgent("https://fill.papermc.io/v3/projects/paper", GenericServerUserAgent);
 		Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(input) as Dictionary<string, object>;
 		Dictionary<string, object> groups = root != null && root.ContainsKey("versions") ? root["versions"] as Dictionary<string, object> : null;
 		List<string> versions = new List<string>();
@@ -1553,7 +1555,7 @@ internal static partial class Launcher
 
 	private static string[] GetPurpurVersionChoices(bool includeSnapshots)
 	{
-		string input = DownloadTextWithUserAgent("https://api.purpurmc.org/v2/purpur", "Minecraft-Server-Launcher/1.5");
+		string input = DownloadTextWithUserAgent("https://api.purpurmc.org/v2/purpur", GenericServerUserAgent);
 		Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(input) as Dictionary<string, object>;
 		object[] items = root != null && root.ContainsKey("versions") ? root["versions"] as object[] : null;
 		List<string> versions = new List<string>();
@@ -1569,7 +1571,7 @@ internal static partial class Launcher
 
 	private static string[] GetFabricVersionChoices(bool includeSnapshots)
 	{
-		string input = DownloadTextWithUserAgent("https://meta.fabricmc.net/v2/versions/game", "Minecraft-Server-Launcher/1.5");
+		string input = DownloadTextWithUserAgent("https://meta.fabricmc.net/v2/versions/game", GenericServerUserAgent);
 		object[] items = new JavaScriptSerializer().DeserializeObject(input) as object[];
 		List<string> versions = new List<string>();
 		if (items != null)
@@ -1593,7 +1595,7 @@ internal static partial class Launcher
 
 	private static string[] GetForgeVersionChoices(bool includeSnapshots)
 	{
-		string input = DownloadTextWithUserAgent("https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json", "Minecraft-Server-Launcher/1.5");
+		string input = DownloadTextWithUserAgent("https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json", GenericServerUserAgent);
 		Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(input) as Dictionary<string, object>;
 		Dictionary<string, object> promotions = root != null && root.ContainsKey("promos") ? root["promos"] as Dictionary<string, object> : null;
 		List<string> versions = new List<string>();
@@ -1613,7 +1615,7 @@ internal static partial class Launcher
 
 	private static string[] GetMojangVersionChoices(bool includeSnapshots)
 	{
-		string input = DownloadTextWithUserAgent("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json", "Minecraft-Server-Launcher/1.5");
+		string input = DownloadTextWithUserAgent("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json", GenericServerUserAgent);
 		Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(input) as Dictionary<string, object>;
 		object[] items = root != null && root.ContainsKey("versions") ? root["versions"] as object[] : null;
 		List<string> versions = new List<string>();
@@ -1913,7 +1915,7 @@ internal static partial class Launcher
 		list.Add(new KeyValuePair<string, string>("enable-command-block", settings.CommandBlock.ToString().ToLowerInvariant()));
 		list.Add(new KeyValuePair<string, string>("online-mode", settings.OnlineMode.ToString().ToLowerInvariant()));
 		List<KeyValuePair<string, string>> list2 = list;
-		string[] array = (File.Exists(path) ? File.ReadAllLines(path, Encoding.UTF8) : new string[1] { "# Minecraft 서버 런처에서 생성한 설정" });
+		string[] array = (File.Exists(path) ? File.ReadAllLines(path, Encoding.UTF8) : new string[1] { "# MineHarbor에서 생성한 설정" });
 		List<string> list3 = new List<string>();
 		HashSet<string> hashSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		string[] array2 = array;
@@ -2134,7 +2136,7 @@ internal static partial class Launcher
 		try
 		{
 			Console.WriteLine(GetServerTypeDisplayName(serverType) + " " + options.MinecraftVersion + " 서버 파일을 내려받는 중...");
-			DownloadFileWithUserAgent(download.Url, temporaryPath, "Minecraft-Server-Launcher/1.5");
+			DownloadFileWithUserAgent(download.Url, temporaryPath, GenericServerUserAgent);
 			ValidateDownloadedServerFile(temporaryPath, download);
 			if (File.Exists(jarPath))
 			{
@@ -2211,7 +2213,7 @@ internal static partial class Launcher
 
 	private static ServerDownloadInfo GetVanillaServerDownloadInfo(string minecraftVersion)
 	{
-		string input = DownloadTextWithUserAgent("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json", "Minecraft-Server-Launcher/1.5");
+		string input = DownloadTextWithUserAgent("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json", GenericServerUserAgent);
 		Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(input) as Dictionary<string, object>;
 		object[] versions = root != null && root.ContainsKey("versions") ? root["versions"] as object[] : null;
 		string versionUrl = null;
@@ -2231,7 +2233,7 @@ internal static partial class Launcher
 		{
 			throw new InvalidDataException("Mojang 버전 메타데이터 주소를 검증하지 못했습니다.");
 		}
-		string versionJson = DownloadTextWithUserAgent(versionUrl, "Minecraft-Server-Launcher/1.5");
+		string versionJson = DownloadTextWithUserAgent(versionUrl, GenericServerUserAgent);
 		Dictionary<string, object> versionRoot = new JavaScriptSerializer().DeserializeObject(versionJson) as Dictionary<string, object>;
 		Dictionary<string, object> downloads = versionRoot != null && versionRoot.ContainsKey("downloads") ? versionRoot["downloads"] as Dictionary<string, object> : null;
 		Dictionary<string, object> server = downloads != null && downloads.ContainsKey("server") ? downloads["server"] as Dictionary<string, object> : null;
@@ -2254,7 +2256,7 @@ internal static partial class Launcher
 
 	private static ServerDownloadInfo GetPurpurServerDownloadInfo(string minecraftVersion)
 	{
-		string input = DownloadTextWithUserAgent("https://api.purpurmc.org/v2/purpur/" + Uri.EscapeDataString(minecraftVersion), "Minecraft-Server-Launcher/1.5");
+		string input = DownloadTextWithUserAgent("https://api.purpurmc.org/v2/purpur/" + Uri.EscapeDataString(minecraftVersion), GenericServerUserAgent);
 		Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(input) as Dictionary<string, object>;
 		Dictionary<string, object> builds = root != null && root.ContainsKey("builds") ? root["builds"] as Dictionary<string, object> : null;
 		string latest = null;
@@ -2275,7 +2277,7 @@ internal static partial class Launcher
 
 	private static ServerDownloadInfo GetFabricServerDownloadInfo(string minecraftVersion)
 	{
-		string loaderInput = DownloadTextWithUserAgent("https://meta.fabricmc.net/v2/versions/loader/" + Uri.EscapeDataString(minecraftVersion), "Minecraft-Server-Launcher/1.5");
+		string loaderInput = DownloadTextWithUserAgent("https://meta.fabricmc.net/v2/versions/loader/" + Uri.EscapeDataString(minecraftVersion), GenericServerUserAgent);
 		object[] loaders = new JavaScriptSerializer().DeserializeObject(loaderInput) as object[];
 		string loaderVersion = null;
 		if (loaders != null)
@@ -2295,7 +2297,7 @@ internal static partial class Launcher
 		{
 			throw new InvalidDataException("Fabric Loader 정보를 찾지 못했습니다.");
 		}
-		string installerInput = DownloadTextWithUserAgent("https://meta.fabricmc.net/v2/versions/installer", "Minecraft-Server-Launcher/1.5");
+		string installerInput = DownloadTextWithUserAgent("https://meta.fabricmc.net/v2/versions/installer", GenericServerUserAgent);
 		object[] installers = new JavaScriptSerializer().DeserializeObject(installerInput) as object[];
 		string installerVersion = null;
 		if (installers != null)
@@ -2353,7 +2355,7 @@ internal static partial class Launcher
 		}
 		string installerPath = Path.Combine(serverDirectory, "forge-installer-" + ToSafeDirectoryName(options.MinecraftVersion + "-" + forgeVersion) + ".jar");
 		Console.WriteLine("Forge Installer를 내려받는 중...");
-		DownloadFileWithUserAgent(installerUrl, installerPath + ".다운로드중", "Minecraft-Server-Launcher/1.5");
+		DownloadFileWithUserAgent(installerUrl, installerPath + ".다운로드중", GenericServerUserAgent);
 		ReplaceFile(installerPath + ".다운로드중", installerPath);
 		Console.WriteLine("Forge 서버 설치를 실행합니다. 네트워크 상태에 따라 시간이 걸릴 수 있습니다.");
 		RunForgeInstaller(javaPath, installerPath, serverDirectory);
@@ -2453,7 +2455,7 @@ internal static partial class Launcher
 
 	private static string GetForgeBuildVersion(string minecraftVersion)
 	{
-		string input = DownloadTextWithUserAgent("https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json", "Minecraft-Server-Launcher/1.5");
+		string input = DownloadTextWithUserAgent("https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json", GenericServerUserAgent);
 		Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(input) as Dictionary<string, object>;
 		Dictionary<string, object> promotions = root != null && root.ContainsKey("promos") ? root["promos"] as Dictionary<string, object> : null;
 		if (promotions == null)
