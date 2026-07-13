@@ -1848,6 +1848,7 @@ internal static partial class Launcher
 						RequestLauncherClose();
 						return;
 					}
+					PurgeExpiredServerTrash(GetServersRootDirectory(AppDomain.CurrentDomain.BaseDirectory), DateTime.UtcNow);
 					SetLoadingState(Localization.CurrentLanguage == Localization.Korean ? "서버 프로필과 설정을 확인하고 있습니다…" : "Checking server profiles and settings…", true, 70);
 					if (IsDisposed || Disposing || !IsHandleCreated)
 					{
@@ -1990,6 +1991,7 @@ internal static partial class Launcher
 			stopButton.Enabled = false;
 			settingsButton.Enabled = true;
 			upgradeButton.Enabled = true;
+			playersButton.Enabled = false;
 			commandBox.Enabled = false;
 			sendButton.Enabled = false;
 			UpdateQuickCommandControls();
@@ -2033,6 +2035,7 @@ internal static partial class Launcher
 			SetStatusKey("Status.Starting", false);
 			SetConnectionAddress(address);
 			stopButton.Enabled = true;
+			playersButton.Enabled = true;
 			commandBox.Enabled = true;
 			sendButton.Enabled = !string.IsNullOrWhiteSpace(commandBox.Text);
 			UpdateQuickCommandControls();
@@ -2783,6 +2786,7 @@ internal static partial class Launcher
 		Add,
 		Edit,
 		Archive,
+		Trash,
 		Check,
 		Refresh
 	}
@@ -3024,6 +3028,13 @@ internal static partial class Launcher
 						graphics.DrawRectangle(pen, left, top + 3, right - left, bottom - top - 3);
 						graphics.DrawLine(pen, left, top, right, top);
 						graphics.DrawLine(pen, centerX - 2, top + 7, centerX + 2, top + 7);
+						break;
+					case ButtonIcon.Trash:
+						graphics.DrawRectangle(pen, left + 3, top + 4, right - left - 6, bottom - top - 4);
+						graphics.DrawLine(pen, left + 1, top + 3, right - 1, top + 3);
+						graphics.DrawLine(pen, centerX - 3, top, centerX + 3, top);
+						graphics.DrawLine(pen, centerX - 2, top + 7, centerX - 2, bottom - 3);
+						graphics.DrawLine(pen, centerX + 2, top + 7, centerX + 2, bottom - 3);
 						break;
 					case ButtonIcon.Check:
 						graphics.DrawLines(pen, new PointF[] { new PointF(left + 1, centerY), new PointF(centerX - 1, bottom - 2), new PointF(right, top + 2) });

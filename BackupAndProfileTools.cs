@@ -353,7 +353,7 @@ internal static partial class Launcher
 			root.Padding = new Padding(24);
 			root.ColumnCount = 1;
 			root.RowCount = 4;
-			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));
+			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 106F));
 			root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
 			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));
@@ -386,7 +386,7 @@ internal static partial class Launcher
 			FlowLayoutPanel actions = new FlowLayoutPanel();
 			actions.Dock = DockStyle.Fill;
 			actions.FlowDirection = FlowDirection.LeftToRight;
-			actions.WrapContents = false;
+			actions.WrapContents = true;
 			actions.Padding = new Padding(0, 7, 0, 0);
 			root.Controls.Add(actions, 0, 3);
 			Button create = NewProfileButton(korean ? "새 서버" : "New", 96, "primary");
@@ -409,6 +409,14 @@ internal static partial class Launcher
 			ApplyButtonIcon(archive, ButtonIcon.Archive);
 			archive.Click += delegate { RunProfileAction(ArchiveProfile); };
 			actions.Controls.Add(archive);
+			Button delete = NewProfileButton(korean ? "삭제" : "Delete", 96, "danger");
+			ApplyButtonIcon(delete, ButtonIcon.Trash);
+			delete.Click += delegate { RunProfileAction(DeleteProfile); };
+			actions.Controls.Add(delete);
+			Button trash = NewProfileButton(korean ? "휴지통" : "Trash", 104, "secondary");
+			ApplyButtonIcon(trash, ButtonIcon.Trash);
+			trash.Click += delegate { OpenServerTrash(); };
+			actions.Controls.Add(trash);
 			Button activate = NewProfileButton(korean ? "이 서버 선택" : "Set active", 116, "primary");
 			ApplyButtonIcon(activate, ButtonIcon.Check);
 			activate.Click += delegate { RunProfileAction(ActivateProfile); };
@@ -451,6 +459,7 @@ internal static partial class Launcher
 
 		private void ReloadProfiles()
 		{
+			PurgeExpiredServerTrash(serversRoot, DateTime.UtcNow);
 			profiles.Clear();
 			profiles.AddRange(ReadManagedProfiles(serversRoot));
 			string active = ReadActiveProfileName(serversRoot);
@@ -652,6 +661,28 @@ internal static partial class Launcher
 				WriteActiveProfileName(serversRoot, replacement);
 				SelectedProfileName = replacement;
 			}
+			ReloadProfiles();
+		}
+
+		private void DeleteProfile()
+		{
+			ManagedProfileRecord profile = GetSelectedProfile();
+			if (profile == null || !EnsureProfileStopped(profile)) return;
+			MessageBox.Show(this, IsBackupKorean() ? "서버 폴더 전체(월드, 플러그인, 모드, 설정)를 휴지통으로 옮기며 30일 동안 복구할 수 있습니다. 별도 백업 폴더는 그대로 유지됩니다. 계속하려면 다음 창에 서버 이름을 입력하세요.\r\n\r\n" + profile.Name : "The entire server folder (worlds, plugins, mods, and settings) will move to Trash and can be restored for 30 days. Separate backups are kept. Enter the server name in the next window to continue.\r\n\r\n" + profile.Name, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			string confirmation = PromptProfileText(this, IsBackupKorean() ? "서버 삭제 확인" : "Confirm server deletion", string.Empty);
+			if (!string.Equals(confirmation, profile.Name, StringComparison.Ordinal))
+			{
+				if (confirmation != null) ShowProfileMessage("서버 이름이 일치하지 않습니다.", "The server name does not match.", true);
+				return;
+			}
+			MoveProfileToServerTrash(serversRoot, profile, DateTime.UtcNow);
+			SelectedProfileName = UpdateActiveProfileAfterRemoval(serversRoot, profiles, profile.Name);
+			ReloadProfiles();
+		}
+
+		private void OpenServerTrash()
+		{
+			using (ServerTrashForm form = new ServerTrashForm(serversRoot)) form.ShowDialog(this);
 			ReloadProfiles();
 		}
 

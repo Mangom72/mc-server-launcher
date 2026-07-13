@@ -30,6 +30,7 @@ $sources = @(
     'BackupAndProfileTools.cs',
     'ContentAndDiagnostics.cs',
     'ManagedServerDashboard.cs',
+	'ServerTrash.cs',
     'NetworkAndPlayerTools.cs',
 	'QuickCommandsAndBridge.cs',
 	'QuickCommandUi.cs',

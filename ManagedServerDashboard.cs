@@ -75,6 +75,8 @@ internal static partial class Launcher
 		private readonly Button importButton;
 		private readonly Button renameButton;
 		private readonly Button archiveButton;
+		private readonly Button deleteButton;
+		private readonly Button trashButton;
 		private readonly CheckBox restartBox;
 		private readonly Label summaryLabel;
 		private readonly Dictionary<string, ManagedServerSession> sessions = new Dictionary<string, ManagedServerSession>(StringComparer.OrdinalIgnoreCase);
@@ -209,6 +211,16 @@ internal static partial class Launcher
 			archiveButton.Click += delegate { RunProfileAction(ArchiveProfile); };
 			profileActions.Controls.Add(archiveButton);
 			EnsureButtonContentFits(archiveButton);
+			deleteButton = NewManagedButton(korean ? "삭제" : "Delete", 86, "danger");
+			ApplyButtonIcon(deleteButton, ButtonIcon.Trash);
+			deleteButton.Click += delegate { RunProfileAction(DeleteProfile); };
+			profileActions.Controls.Add(deleteButton);
+			EnsureButtonContentFits(deleteButton);
+			trashButton = NewManagedButton(korean ? "휴지통" : "Trash", 96, "secondary");
+			ApplyButtonIcon(trashButton, ButtonIcon.Trash);
+			trashButton.Click += delegate { OpenServerTrash(); };
+			profileActions.Controls.Add(trashButton);
+			EnsureButtonContentFits(trashButton);
 			activateButton = NewManagedButton(korean ? "기본 서버로" : "Set active", 116, "secondary");
 			ApplyButtonIcon(activateButton, ButtonIcon.Check);
 			activateButton.Click += delegate { ActivateSelected(); };
@@ -266,6 +278,7 @@ internal static partial class Launcher
 
 		private void ReloadProfiles()
 		{
+			PurgeExpiredServerTrash(serversRoot, DateTime.UtcNow);
 			string selected = GetSelectedProfileName();
 			if (string.IsNullOrEmpty(selected))
 			{
@@ -514,6 +527,29 @@ internal static partial class Launcher
 				string replacement = string.Equals(profiles[0].Name, profile.Name, StringComparison.OrdinalIgnoreCase) ? profiles[1].Name : profiles[0].Name;
 				WriteActiveProfileName(serversRoot, replacement);
 			}
+			ReloadProfiles();
+		}
+
+		private void DeleteProfile()
+		{
+			ManagedProfileRecord profile = GetSelectedProfile();
+			if (profile == null || !EnsureProfileStopped(profile)) return;
+			MessageBox.Show(this, ManagedText("서버 폴더 전체(월드, 플러그인, 모드, 설정)를 휴지통으로 옮기며 30일 동안 복구할 수 있습니다. 별도 백업 폴더는 그대로 유지됩니다. 계속하려면 다음 창에 서버 이름을 입력하세요.\r\n\r\n" + profile.Name, "The entire server folder (worlds, plugins, mods, and settings) will move to Trash and can be restored for 30 days. Separate backups are kept. Enter the server name in the next window to continue.\r\n\r\n" + profile.Name), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			string confirmation = PromptProfileText(this, ManagedText("서버 삭제 확인", "Confirm server deletion"), string.Empty);
+			if (!string.Equals(confirmation, profile.Name, StringComparison.Ordinal))
+			{
+				if (confirmation != null) ShowManagedMessage("서버 이름이 일치하지 않습니다.", "The server name does not match.", true);
+				return;
+			}
+			MoveProfileToServerTrash(serversRoot, profile, DateTime.UtcNow);
+			sessions.Remove(profile.Name);
+			UpdateActiveProfileAfterRemoval(serversRoot, profiles, profile.Name);
+			ReloadProfiles();
+		}
+
+		private void OpenServerTrash()
+		{
+			using (ServerTrashForm form = new ServerTrashForm(serversRoot)) form.ShowDialog(this);
 			ReloadProfiles();
 		}
 
@@ -918,6 +954,8 @@ internal static partial class Launcher
 			cloneButton.Enabled = profile != null && !mainServerBusy && !running && !runningElsewhere;
 			renameButton.Enabled = profile != null && !mainServerBusy && !running && !runningElsewhere;
 			archiveButton.Enabled = profile != null && !mainServerBusy && !running && !runningElsewhere && profiles.Count > 1;
+			deleteButton.Enabled = profile != null && !mainServerBusy && !running && !runningElsewhere;
+			trashButton.Enabled = !mainServerBusy;
 		}
 
 		private void ShowManagedMessage(string korean, string english, bool warning)

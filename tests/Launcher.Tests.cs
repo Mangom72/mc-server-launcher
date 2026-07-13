@@ -36,9 +36,11 @@ internal static class LauncherTests
 			TestDataLocations(temporary);
 			TestSetupLayoutAndValidation();
 			TestUxAccessibility();
+			TestPlayerButtonLifecycle();
 			TestJavaSelection();
 			TestConsoleClassificationAndLaunchArguments();
 			TestBackupRestoreAndProfileCopy(temporary);
+			TestServerTrashLifecycle(temporary);
 			TestUpnpOwnershipRules();
 			TestModrinthHash(temporary);
 			TestDiagnosticRedaction(temporary);
@@ -155,6 +157,56 @@ internal static class LauncherTests
 		object interruptedAsset = CreateReleaseAsset(interruptedUrl, payload.Length + 20);
 		string interrupted = Path.Combine(root, "interrupted.download");
 		ExpectFailure(delegate { Invoke("DownloadLauncherUpdate", new object[] { interruptedAsset, interrupted }); }, "중단된 다운로드");
+		Pass();
+	}
+
+	private static void TestServerTrashLifecycle(string root)
+	{
+		string serversRoot = Path.Combine(root, "trash-lifecycle");
+		string profileDirectory = Path.Combine(serversRoot, "servers", "삭제 테스트");
+		Directory.CreateDirectory(profileDirectory);
+		File.WriteAllText(Path.Combine(profileDirectory, "world.dat"), "world", Encoding.UTF8);
+		Type profileType = launcher.GetNestedType("ManagedProfileRecord", BindingFlags.NonPublic);
+		object profile = Activator.CreateInstance(profileType, true);
+		SetPublic(profile, "Name", "삭제 테스트");
+		SetPublic(profile, "Directory", profileDirectory);
+		DateTime deletedUtc = DateTime.UtcNow.AddMinutes(-1);
+		object trashed = Invoke("MoveProfileToServerTrash", new object[] { serversRoot, profile, deletedUtc });
+		string trashedDirectory = Convert.ToString(GetField(trashed, "Directory"));
+		Equal(false, Directory.Exists(profileDirectory), "서버를 휴지통으로 이동");
+		Equal(true, File.Exists(Path.Combine(trashedDirectory, ".mineharbor-trash.json")), "휴지통 메타데이터 기록");
+		IList records = (IList)Invoke("ReadServerTrashRecords", new object[] { serversRoot });
+		Equal(1, records.Count, "휴지통 항목 불러오기");
+		DateTime expiresUtc = (DateTime)GetField(records[0], "ExpiresUtc");
+		if (Math.Abs((expiresUtc - deletedUtc).TotalDays - 30.0) > 0.01) throw new InvalidOperationException("휴지통 보관 기간이 30일이 아닙니다.");
+		Invoke("RestoreServerTrashRecord", new object[] { serversRoot, records[0], "복구 테스트" });
+		string restoredDirectory = Path.Combine(serversRoot, "servers", "복구 테스트");
+		Equal(true, File.Exists(Path.Combine(restoredDirectory, "world.dat")), "휴지통 서버 복구");
+		Equal(false, File.Exists(Path.Combine(restoredDirectory, ".mineharbor-trash.json")), "복구 후 휴지통 메타데이터 제거");
+
+		SetPublic(profile, "Name", "복구 테스트");
+		SetPublic(profile, "Directory", restoredDirectory);
+		object expired = Invoke("MoveProfileToServerTrash", new object[] { serversRoot, profile, DateTime.UtcNow.AddDays(-31) });
+		string expiredDirectory = Convert.ToString(GetField(expired, "Directory"));
+		string unknownDirectory = Path.Combine(serversRoot, "servers-trash", "metadata-없는-폴더");
+		Directory.CreateDirectory(unknownDirectory);
+		Equal(1, Invoke("PurgeExpiredServerTrash", new object[] { serversRoot, DateTime.UtcNow }), "만료 서버 자동 삭제 개수");
+		Equal(false, Directory.Exists(expiredDirectory), "30일 지난 서버 자동 삭제");
+		Equal(true, Directory.Exists(unknownDirectory), "메타데이터 없는 폴더 보존");
+		Invoke("WriteActiveProfileName", new object[] { serversRoot, "복구 테스트" });
+		IList remainingProfiles = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(profileType));
+		remainingProfiles.Add(profile);
+		Equal(null, Invoke("UpdateActiveProfileAfterRemoval", new object[] { serversRoot, remainingProfiles, "복구 테스트" }), "마지막 서버 삭제 허용");
+		Equal(false, File.Exists(Path.Combine(serversRoot, ".active-server-profile")), "마지막 서버 삭제 후 활성 프로필 해제");
+		Type trashFormType = launcher.GetNestedType("ServerTrashForm", BindingFlags.NonPublic);
+		using (Form trashForm = (Form)Activator.CreateInstance(trashFormType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { serversRoot }, null))
+		{
+			ListView trashList = (ListView)GetPrivateField(trashFormType, trashForm, "trashList");
+			Button restoreButton = (Button)GetPrivateField(trashFormType, trashForm, "restoreButton");
+			Button deleteButton = (Button)GetPrivateField(trashFormType, trashForm, "deleteButton");
+			Equal(4, trashList.Columns.Count, "휴지통 목록 정보 열");
+			if (string.IsNullOrEmpty(restoreButton.Text) || string.IsNullOrEmpty(deleteButton.Text)) throw new InvalidOperationException("휴지통 작업 버튼 문구가 없습니다.");
+		}
 		Pass();
 	}
 
@@ -322,8 +374,8 @@ internal static class LauncherTests
 		object managedIcon = Enum.Parse(managedIconType, "Server");
 		string[][] managementLabels = new string[][]
 		{
-			new string[] { "시작", "안전 종료", "콘솔", "새 서버", "복제", "가져오기", "이름 변경", "보관", "기본 서버로", "새로고침", "이 서버 선택" },
-			new string[] { "Start", "Stop safely", "Console", "New", "Clone", "Import", "Rename", "Archive", "Set active", "Refresh" }
+			new string[] { "시작", "안전 종료", "콘솔", "새 서버", "복제", "가져오기", "이름 변경", "보관", "삭제", "휴지통", "영구 삭제", "기본 서버로", "새로고침", "이 서버 선택" },
+			new string[] { "Start", "Stop safely", "Console", "New", "Clone", "Import", "Rename", "Archive", "Delete", "Trash", "Delete forever", "Set active", "Refresh" }
 		};
 		foreach (string[] labels in managementLabels)
 		{
@@ -367,6 +419,21 @@ internal static class LauncherTests
 			}
 		}
 		languageField.SetValue(null, originalLanguage);
+		Pass();
+	}
+
+	private static void TestPlayerButtonLifecycle()
+	{
+		Type formType = launcher.GetNestedType("LauncherForm", BindingFlags.NonPublic);
+		using (Form form = (Form)Activator.CreateInstance(formType, true))
+		{
+			Button playersButton = (Button)GetPrivateField(formType, form, "playersButton");
+			Equal(false, playersButton.Enabled, "서버 시작 전 플레이어 버튼 비활성화");
+			formType.GetMethod("ServerStarted", BindingFlags.Instance | BindingFlags.Public).Invoke(form, new object[] { "127.0.0.1:25565" });
+			Equal(true, playersButton.Enabled, "서버 시작 후 플레이어 버튼 활성화");
+			formType.GetMethod("WorkflowFinished", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(form, new object[] { 0, false });
+			Equal(false, playersButton.Enabled, "서버 종료 후 플레이어 버튼 비활성화");
+		}
 		Pass();
 	}
 
