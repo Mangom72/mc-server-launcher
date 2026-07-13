@@ -553,9 +553,9 @@ internal static class LauncherTests
 		object session = Activator.CreateInstance(sessionType, true);
 		SetPublic(session, "Profile", profile);
 		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] 외부 접속 실패" });
-		Equal("접속 불가", Convert.ToString(GetField(session, "Status")), "포트포워딩 실패 상태");
+		Equal(Convert.ToString(Invoke("ManagedText", new object[] { "접속 불가", "Unreachable" })), Convert.ToString(GetField(session, "Status")), "포트포워딩 실패 상태");
 		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] UPnP 매핑 성공 · 203.0.113.10:25566" });
-		Equal("온라인", Convert.ToString(GetField(session, "Status")), "외부 접속 복구 상태");
+		Equal(Convert.ToString(Invoke("ManagedText", new object[] { "온라인", "Online" })), Convert.ToString(GetField(session, "Status")), "외부 접속 복구 상태");
 		Equal("203.0.113.10:25566", Convert.ToString(GetField(session, "Address")), "외부 접속 주소 갱신");
 		Pass();
 	}
