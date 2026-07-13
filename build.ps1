@@ -54,6 +54,15 @@ if (!$SkipCompile) {
     if (!(Test-Path -LiteralPath $csc)) { throw 'The .NET Framework 4.x C# compiler was not found.' }
     & $csc @arguments
 	if ($LASTEXITCODE -ne 0) { throw "C# build failed with exit code $LASTEXITCODE." }
+	# v1.2.1 이하 런처는 1MB보다 작은 업데이트 파일을 손상된 메타데이터로 거부합니다.
+	# Java를 다시 내장하지 않고 PE 오버레이 여백만 추가해 기존 자동 업데이트와 호환합니다.
+	$minimumLegacyUpdateSize = 1MB
+	$portableInfo = Get-Item -LiteralPath $portableExe
+	if ($portableInfo.Length -lt $minimumLegacyUpdateSize) {
+		$stream = [IO.File]::Open($portableExe, [IO.FileMode]::Open, [IO.FileAccess]::Write, [IO.FileShare]::None)
+		try { $stream.SetLength($minimumLegacyUpdateSize) }
+		finally { $stream.Dispose() }
+	}
 	$bridgeBuild = & (Join-Path $projectRoot 'scripts\Build-CommandBridge.ps1') -OutputDirectory $output -DependencyDirectory $dependencyDirectory
 }
 elseif (!(Test-Path -LiteralPath $portableExe)) {
