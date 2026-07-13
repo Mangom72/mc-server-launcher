@@ -562,6 +562,10 @@ internal static class LauncherTests
 
 	private static void TestUpnpOwnershipRules()
 	{
+		Thread upnpThread = new Thread((ThreadStart)delegate { });
+		Invoke("ConfigureExternalAccessThread", new object[] { upnpThread });
+		Equal(ApartmentState.STA, upnpThread.GetApartmentState(), "UPnP COM 스레드 STA 설정");
+
 		Type attemptType = launcher.GetNestedType("UpnpMappingAttempt", BindingFlags.NonPublic);
 		object attempt = Activator.CreateInstance(attemptType, true);
 		FakeMapping conflicting = new FakeMapping(25565, "TCP", 25565, "192.168.0.99", "Other service");
@@ -587,6 +591,17 @@ internal static class LauncherTests
 		((IList)GetField(ownedAttempt, "Created")).Add(record);
 		Invoke("DeleteCreatedUpnpMappings", new object[] { ownedAttempt });
 		Equal(1, ownedCollection.RemoveCount, "런처 소유 UPnP 매핑 삭제");
+
+		object recoveredAttempt = Activator.CreateInstance(attemptType, true);
+		FakeMappingCollection recoveredCollection = new FakeMappingCollection(null, true);
+		attemptType.GetField("Collection", BindingFlags.Instance | BindingFlags.Public).SetValue(recoveredAttempt, recoveredCollection);
+		using (ManualResetEvent stopped = new ManualResetEvent(false))
+		{
+			Equal(true, Invoke("TryAddSingleUpnpMapping", new object[] { recoveredAttempt, 25567, 25567, "TCP", "192.168.0.10", "MineHarbor recovered", stopped }), "응답 손실 후 생성된 UPnP 매핑 회수");
+		}
+		Equal(1, ((IList)GetField(recoveredAttempt, "Created")).Count, "회수한 매핑 소유권 기록");
+		Invoke("DeleteCreatedUpnpMappings", new object[] { recoveredAttempt });
+		Equal(1, recoveredCollection.RemoveCount, "응답 손실 후 회수한 매핑 삭제");
 		Pass();
 	}
 
@@ -887,8 +902,10 @@ internal static class LauncherTests
 	public sealed class FakeMappingCollection : IEnumerable
 	{
 		private FakeMapping mapping;
+		private bool throwAfterAddOnce;
 		public int RemoveCount { get; private set; }
-		public FakeMappingCollection(FakeMapping value) { mapping = value; }
+		public FakeMappingCollection(FakeMapping value) : this(value, false) { }
+		public FakeMappingCollection(FakeMapping value, bool throwAfterAdd) { mapping = value; throwAfterAddOnce = throwAfterAdd; }
 		public FakeMapping this[int port, string protocol]
 		{
 			get { return mapping != null && mapping.ExternalPort == port && string.Equals(mapping.Protocol, protocol, StringComparison.OrdinalIgnoreCase) ? mapping : null; }
@@ -896,6 +913,11 @@ internal static class LauncherTests
 		public object Add(int externalPort, string protocol, int internalPort, string internalClient, bool enabled, string description)
 		{
 			mapping = new FakeMapping(externalPort, protocol, internalPort, internalClient, description);
+			if (throwAfterAddOnce)
+			{
+				throwAfterAddOnce = false;
+				throw new InvalidOperationException("공유기가 매핑 생성 후 응답을 잃었습니다.");
+			}
 			return mapping;
 		}
 		public void Remove(int externalPort, string protocol) { RemoveCount++; mapping = null; }

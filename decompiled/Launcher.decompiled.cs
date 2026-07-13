@@ -3303,6 +3303,7 @@ internal static partial class Launcher
 			});
 			thread.IsBackground = true;
 			thread.Name = "외부 접속 확인";
+			ConfigureExternalAccessThread(thread);
 			thread.Start();
 			process.WaitForExit();
 			serverStopped.Set();

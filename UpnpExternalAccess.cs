@@ -43,6 +43,15 @@ internal static partial class Launcher
 
 	private static NetworkToolsForm activeManualNetworkForm;
 	private static string lastUpnpCleanupStatus;
+	private const int UpnpDiscoveryAttemptCount = 3;
+	private const int UpnpMappingAttemptCount = 3;
+	private const int UpnpMappingVerificationCount = 3;
+
+	private static void ConfigureExternalAccessThread(Thread thread)
+	{
+		if (thread == null) throw new ArgumentNullException("thread");
+		thread.SetApartmentState(ApartmentState.STA);
+	}
 
 	private static void RunExternalAccessPipeline(int serverPort, string javaPath, string serverDirectory, WaitHandle serverStopped)
 	{
@@ -137,7 +146,7 @@ internal static partial class Launcher
 			{
 				return;
 			}
-			ExternalPortCheckResult recheck = CheckExternalPort(serverPort, serverStopped, 3);
+			ExternalPortCheckResult recheck = CheckExternalPort(serverPort, serverStopped, 5);
 			if (recheck.Reachable)
 			{
 				string address = FormatExternalAddress(recheck.PublicIp, serverPort);
@@ -216,7 +225,7 @@ internal static partial class Launcher
 		try
 		{
 			ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
-			result.PublicIp = DownloadText("https://portchecker.io/api/me").Trim();
+			result.PublicIp = DownloadExternalCheckText("https://portchecker.io/api/me", stopped, 2).Trim();
 			IPAddress parsed;
 			if (!IPAddress.TryParse(result.PublicIp, out parsed) || IPAddress.IsLoopback(parsed))
 			{
@@ -228,7 +237,7 @@ internal static partial class Launcher
 				{
 					return result;
 				}
-				string response = DownloadText("https://portchecker.io/api/me/" + port).Trim();
+				string response = DownloadExternalCheckText("https://portchecker.io/api/me/" + port, stopped, 2).Trim();
 				bool reachable;
 				if (!bool.TryParse(response, out reachable))
 				{
@@ -253,6 +262,35 @@ internal static partial class Launcher
 		return result;
 	}
 
+	private static string DownloadExternalCheckText(string url, WaitHandle stopped, int attempts)
+	{
+		Exception lastError = null;
+		for (int attempt = 1; attempt <= Math.Max(1, attempts); attempt++)
+		{
+			if (stopped.WaitOne(0))
+			{
+				throw new OperationCanceledException("서버가 종료되어 외부 접속 검사를 중단했습니다.");
+			}
+			try
+			{
+				return DownloadText(url);
+			}
+			catch (Exception exception)
+			{
+				lastError = exception;
+				if (attempt < attempts)
+				{
+					Console.WriteLine("[외부 접속] 검사 서비스 연결 재시도 " + (attempt + 1).ToString(CultureInfo.InvariantCulture) + "/" + attempts.ToString(CultureInfo.InvariantCulture));
+					if (stopped.WaitOne(attempt * 1000))
+					{
+						throw new OperationCanceledException("서버가 종료되어 외부 접속 검사를 중단했습니다.");
+					}
+				}
+			}
+		}
+		throw lastError ?? new WebException("외부 접속 검사 서비스에 연결하지 못했습니다.");
+	}
+
 	private static UpnpMappingAttempt TryCreateUpnpMappings(int serverPort, NetworkDetails network, bool udpNeeded, WaitHandle stopped)
 	{
 		UpnpMappingAttempt result = new UpnpMappingAttempt();
@@ -268,17 +306,8 @@ internal static partial class Launcher
 				result.Error = "서버가 종료되어 UPnP 매핑을 중단했습니다.";
 				return result;
 			}
-			Type natType = Type.GetTypeFromProgID("HNetCfg.NATUPnP", false);
-			if (natType == null)
+			if (!TryDiscoverUpnpCollection(result, stopped))
 			{
-				result.Error = "Windows UPnP NAT 구성 요소를 찾지 못했습니다.";
-				return result;
-			}
-			result.NatObject = Activator.CreateInstance(natType);
-			result.Collection = GetComProperty(result.NatObject, "StaticPortMappingCollection");
-			if (result.Collection == null)
-			{
-				result.Error = "UPnP를 지원하는 공유기 장치를 찾지 못했습니다.";
 				return result;
 			}
 			ReportExternalAccessStatus("UPnP 자동 매핑 중", false);
@@ -308,65 +337,213 @@ internal static partial class Launcher
 		return result;
 	}
 
-	private static bool TryAddSingleUpnpMapping(UpnpMappingAttempt attempt, int externalPort, int internalPort, string protocol, string internalClient, string description, WaitHandle stopped)
+	private static bool TryDiscoverUpnpCollection(UpnpMappingAttempt attempt, WaitHandle stopped)
 	{
-		object existing = FindUpnpMapping(attempt.Collection, externalPort, protocol);
-		if (existing != null)
+		Type natType = Type.GetTypeFromProgID("HNetCfg.NATUPnP", false);
+		if (natType == null)
 		{
+			attempt.Error = "Windows UPnP NAT 구성 요소를 찾지 못했습니다.";
+			return false;
+		}
+		string lastError = null;
+		for (int index = 1; index <= UpnpDiscoveryAttemptCount; index++)
+		{
+			if (stopped.WaitOne(0))
+			{
+				attempt.Error = "서버가 종료되어 UPnP 장치 검색을 중단했습니다.";
+				return false;
+			}
+			object natObject = null;
+			object collection = null;
 			try
 			{
-				string existingClient = Convert.ToString(GetComProperty(existing, "InternalClient"), CultureInfo.InvariantCulture);
-				int existingPort = Convert.ToInt32(GetComProperty(existing, "InternalPort"), CultureInfo.InvariantCulture);
-				attempt.RouterExternalIp = Convert.ToString(GetComProperty(existing, "ExternalIPAddress"), CultureInfo.InvariantCulture);
-				if (string.Equals(existingClient, internalClient, StringComparison.OrdinalIgnoreCase) && existingPort == internalPort)
+				natObject = Activator.CreateInstance(natType);
+				collection = GetComProperty(natObject, "StaticPortMappingCollection");
+				if (collection != null)
 				{
-					attempt.ExistingMatchingMapping = true;
+					attempt.NatObject = natObject;
+					attempt.Collection = collection;
 					return true;
 				}
-				attempt.PortConflict = true;
-				attempt.Error = protocol + " " + externalPort + " 포트가 이미 " + existingClient + ":" + existingPort + "에 연결되어 있습니다.";
+				lastError = "UPnP를 지원하는 공유기 장치를 찾지 못했습니다.";
+			}
+			catch (Exception exception)
+			{
+				lastError = SummarizeUpnpError(exception);
+			}
+			ReleaseComObject(collection);
+			ReleaseComObject(natObject);
+			if (index < UpnpDiscoveryAttemptCount)
+			{
+				Console.WriteLine("[UPnP] 공유기 검색 재시도 " + (index + 1).ToString(CultureInfo.InvariantCulture) + "/" + UpnpDiscoveryAttemptCount.ToString(CultureInfo.InvariantCulture));
+				if (stopped.WaitOne(index * 1000))
+				{
+					attempt.Error = "서버가 종료되어 UPnP 장치 검색을 중단했습니다.";
+					return false;
+				}
+			}
+		}
+		attempt.Error = "UPnP 공유기 검색을 " + UpnpDiscoveryAttemptCount.ToString(CultureInfo.InvariantCulture) + "회 시도했지만 실패했습니다. " + (lastError ?? string.Empty);
+		return false;
+	}
+
+	private static bool TryAddSingleUpnpMapping(UpnpMappingAttempt attempt, int externalPort, int internalPort, string protocol, string internalClient, string description, WaitHandle stopped)
+	{
+		for (int addAttempt = 1; addAttempt <= UpnpMappingAttemptCount; addAttempt++)
+		{
+			object existing = FindUpnpMapping(attempt.Collection, externalPort, protocol);
+			if (existing != null)
+			{
+				try
+				{
+					return AcceptExistingUpnpMapping(attempt, existing, externalPort, internalPort, protocol, internalClient, description);
+				}
+				finally
+				{
+					ReleaseComObject(existing);
+				}
+			}
+			if (stopped.WaitOne(0))
+			{
+				attempt.Error = "서버가 종료되어 UPnP 매핑을 중단했습니다.";
 				return false;
+			}
+			object created = null;
+			try
+			{
+				created = InvokeComMethod(attempt.Collection, "Add", externalPort, protocol, internalPort, internalClient, true, description);
+				if (created != null && MappingTargetsEndpoint(created, internalPort, internalClient))
+				{
+					RecordCreatedUpnpMapping(attempt, externalPort, internalPort, protocol, internalClient, description);
+					try
+					{
+						attempt.RouterExternalIp = Convert.ToString(GetComProperty(created, "ExternalIPAddress"), CultureInfo.InvariantCulture);
+					}
+					catch
+					{
+						// 외부 IP 속성을 제공하지 않는 공유기도 매핑 자체는 사용할 수 있습니다.
+					}
+					VerifyUpnpMappingVisibility(attempt, externalPort, internalPort, protocol, internalClient, stopped);
+					Console.WriteLine("[UPnP] " + protocol + " " + externalPort + " → " + internalClient + ":" + internalPort + " 매핑을 만들었습니다.");
+					return true;
+				}
+				attempt.Error = protocol + " UPnP 매핑 생성 결과를 확인하지 못했습니다.";
+			}
+			catch (Exception exception)
+			{
+				attempt.Error = SummarizeUpnpError(exception);
 			}
 			finally
 			{
-				ReleaseComObject(existing);
+				ReleaseComObject(created);
+			}
+			if (addAttempt < UpnpMappingAttemptCount)
+			{
+				Console.WriteLine("[UPnP] " + protocol + " 매핑 생성 재시도 " + (addAttempt + 1).ToString(CultureInfo.InvariantCulture) + "/" + UpnpMappingAttemptCount.ToString(CultureInfo.InvariantCulture));
+				if (stopped.WaitOne(addAttempt * 750))
+				{
+					attempt.Error = "서버가 종료되어 UPnP 매핑을 중단했습니다.";
+					return false;
+				}
 			}
 		}
-		if (stopped.WaitOne(0))
-		{
-			attempt.Error = "서버가 종료되어 UPnP 매핑을 중단했습니다.";
-			return false;
-		}
-		object created = InvokeComMethod(attempt.Collection, "Add", externalPort, protocol, internalPort, internalClient, true, description);
+		return false;
+	}
+
+	private static bool AcceptExistingUpnpMapping(UpnpMappingAttempt attempt, object existing, int externalPort, int internalPort, string protocol, string internalClient, string description)
+	{
+		string existingClient = Convert.ToString(GetComProperty(existing, "InternalClient"), CultureInfo.InvariantCulture);
+		int existingPort = Convert.ToInt32(GetComProperty(existing, "InternalPort"), CultureInfo.InvariantCulture);
 		try
 		{
-			if (created == null)
-			{
-				attempt.Error = protocol + " UPnP 매핑 생성 결과를 확인하지 못했습니다.";
-				return false;
-			}
-			CreatedUpnpMapping record = new CreatedUpnpMapping();
-			record.ExternalPort = externalPort;
-			record.InternalPort = internalPort;
-			record.Protocol = protocol;
-			record.InternalClient = internalClient;
-			record.Description = description;
-			attempt.Created.Add(record);
+			attempt.RouterExternalIp = Convert.ToString(GetComProperty(existing, "ExternalIPAddress"), CultureInfo.InvariantCulture);
+		}
+		catch
+		{
+			// 외부 IP 속성이 없어도 내부 대상이 같으면 기존 매핑을 사용할 수 있습니다.
+		}
+		if (string.Equals(existingClient, internalClient, StringComparison.OrdinalIgnoreCase) && existingPort == internalPort)
+		{
+			string existingDescription = string.Empty;
 			try
 			{
-				attempt.RouterExternalIp = Convert.ToString(GetComProperty(created, "ExternalIPAddress"), CultureInfo.InvariantCulture);
+				existingDescription = Convert.ToString(GetComProperty(existing, "Description"), CultureInfo.InvariantCulture);
 			}
 			catch
 			{
-				// 외부 IP 속성을 제공하지 않는 공유기도 매핑 자체는 사용할 수 있습니다.
 			}
-			Console.WriteLine("[UPnP] " + protocol + " " + externalPort + " → " + internalClient + ":" + internalPort + " 매핑을 만들었습니다.");
+			if (string.Equals(existingDescription, description, StringComparison.Ordinal))
+			{
+				// Add 호출이 응답 전에 성공했을 수 있으므로 런처 소유 매핑으로 회수합니다.
+				RecordCreatedUpnpMapping(attempt, externalPort, internalPort, protocol, internalClient, description);
+			}
+			else
+			{
+				attempt.ExistingMatchingMapping = true;
+			}
 			return true;
 		}
-		finally
+		attempt.PortConflict = true;
+		attempt.Error = protocol + " " + externalPort + " 포트가 이미 " + existingClient + ":" + existingPort + "에 연결되어 있습니다.";
+		return false;
+	}
+
+	private static bool MappingTargetsEndpoint(object mapping, int internalPort, string internalClient)
+	{
+		if (mapping == null)
 		{
-			ReleaseComObject(created);
+			return false;
 		}
+		string client = Convert.ToString(GetComProperty(mapping, "InternalClient"), CultureInfo.InvariantCulture);
+		int port = Convert.ToInt32(GetComProperty(mapping, "InternalPort"), CultureInfo.InvariantCulture);
+		return port == internalPort && string.Equals(client, internalClient, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static void RecordCreatedUpnpMapping(UpnpMappingAttempt attempt, int externalPort, int internalPort, string protocol, string internalClient, string description)
+	{
+		for (int i = 0; i < attempt.Created.Count; i++)
+		{
+			CreatedUpnpMapping current = attempt.Created[i];
+			if (current.ExternalPort == externalPort && string.Equals(current.Protocol, protocol, StringComparison.OrdinalIgnoreCase))
+			{
+				return;
+			}
+		}
+		CreatedUpnpMapping record = new CreatedUpnpMapping();
+		record.ExternalPort = externalPort;
+		record.InternalPort = internalPort;
+		record.Protocol = protocol;
+		record.InternalClient = internalClient;
+		record.Description = description;
+		attempt.Created.Add(record);
+	}
+
+	private static bool VerifyUpnpMappingVisibility(UpnpMappingAttempt attempt, int externalPort, int internalPort, string protocol, string internalClient, WaitHandle stopped)
+	{
+		for (int index = 1; index <= UpnpMappingVerificationCount; index++)
+		{
+			object current = FindUpnpMapping(attempt.Collection, externalPort, protocol);
+			try
+			{
+				if (current != null && MappingTargetsEndpoint(current, internalPort, internalClient))
+				{
+					return true;
+				}
+			}
+			catch
+			{
+			}
+			finally
+			{
+				ReleaseComObject(current);
+			}
+			if (index < UpnpMappingVerificationCount && stopped.WaitOne(index * 400))
+			{
+				return false;
+			}
+		}
+		Console.WriteLine("[UPnP] 공유기 목록 반영이 지연되고 있어 외부 접속 검사로 확인을 계속합니다.");
+		return false;
 	}
 
 	private static object FindUpnpMapping(object collection, int externalPort, string protocol)
