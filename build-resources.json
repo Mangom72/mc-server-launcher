@@ -1,4 +1,10 @@
 {
+  "java": {
+    "fileName": "Paper26_2.java25.zip",
+    "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.3%2B9/OpenJDK25U-jdk_x64_windows_hotspot_25.0.3_9.zip",
+    "sha256": "709312cd0420296d9b9de917fe6e28a5b979e875ee5ab91783fb79bcd5857235",
+    "size": 141131903
+  },
   "paperApi": {
     "fileName": "paper-api-26.2.build.56-alpha.jar",
     "url": "https://repo.papermc.io/repository/maven-public/io/papermc/paper/paper-api/26.2.build.56-alpha/paper-api-26.2.build.56-alpha.jar",
