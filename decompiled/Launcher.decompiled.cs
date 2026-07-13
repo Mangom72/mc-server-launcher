@@ -235,6 +235,8 @@ internal static partial class Launcher
 
 	private const string LauncherUpdateDirectoryName = "MineHarborLauncherUpdate";
 
+	private const string LegacyLauncherUpdateDirectoryName = "Paper26.2LauncherUpdate";
+
 	private const string LauncherUpdateMetadataAssetName = "update.json";
 
 	private static string PendingLauncherUpdateDirectory;
@@ -898,14 +900,19 @@ internal static partial class Launcher
 	{
 		try
 		{
-			string text = Path.GetFullPath(Path.Combine(Path.GetTempPath(), LauncherUpdateDirectoryName)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 			string text2 = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-			return text2.StartsWith(text, StringComparison.OrdinalIgnoreCase) && text2.Length > text.Length;
+			return IsLauncherUpdateDirectoryUnderRoot(text2, LauncherUpdateDirectoryName) || IsLauncherUpdateDirectoryUnderRoot(text2, LegacyLauncherUpdateDirectoryName);
 		}
 		catch
 		{
 			return false;
 		}
+	}
+
+	private static bool IsLauncherUpdateDirectoryUnderRoot(string normalizedPath, string rootDirectoryName)
+	{
+		string text = Path.GetFullPath(Path.Combine(Path.GetTempPath(), rootDirectoryName)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+		return normalizedPath.StartsWith(text, StringComparison.OrdinalIgnoreCase) && normalizedPath.Length > text.Length;
 	}
 
 	private static string QuoteCommandLineArgument(string value)

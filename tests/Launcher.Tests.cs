@@ -30,6 +30,7 @@ internal static class LauncherTests
 			TestVersionSeparation(assembly);
 			TestProductVersionParsing();
 			TestUpdateMetadataParsing();
+			TestLauncherUpdateDirectoryCompatibility();
 			TestHashAndReplacement(temporary);
 			TestMockedDownload(temporary);
 			TestDataLocations(temporary);
@@ -111,6 +112,18 @@ internal static class LauncherTests
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { "{}" }); }, "누락된 업데이트 메타데이터");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { json.Replace(hash, "bad") }); }, "잘못된 업데이트 해시");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { json.Replace("https://github.com/Mangom72/", "http://example.com/") }); }, "허용되지 않은 업데이트 주소");
+		Pass();
+	}
+
+	private static void TestLauncherUpdateDirectoryCompatibility()
+	{
+		string current = Path.Combine(Path.GetTempPath(), "MineHarborLauncherUpdate", Guid.NewGuid().ToString("N"));
+		string legacy = Path.Combine(Path.GetTempPath(), "Paper26.2LauncherUpdate", Guid.NewGuid().ToString("N"));
+		string unrelated = Path.Combine(Path.GetTempPath(), "UntrustedLauncherUpdate", Guid.NewGuid().ToString("N"));
+		Equal(true, Invoke("IsSafeLauncherUpdateDirectory", new object[] { current }), "현재 런처 업데이트 임시 경로");
+		Equal(true, Invoke("IsSafeLauncherUpdateDirectory", new object[] { legacy }), "v0.4.2 업데이트 임시 경로 호환");
+		Equal(false, Invoke("IsSafeLauncherUpdateDirectory", new object[] { unrelated }), "허용되지 않은 업데이트 임시 경로 차단");
+		Equal(false, Invoke("IsSafeLauncherUpdateDirectory", new object[] { Path.Combine(Path.GetTempPath(), "MineHarborLauncherUpdate") }), "업데이트 루트 자체 차단");
 		Pass();
 	}
 
