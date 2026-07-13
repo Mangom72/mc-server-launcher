@@ -239,6 +239,7 @@ internal static partial class Launcher
 		if (value.Contains("서버 시작") || value == "start" || value == "start server") return korean ? "선택한 프로필의 서버를 시작합니다. 단축키: F5" : "Start the selected server profile. Shortcut: F5";
 		if (value.Contains("서버 종료") || value.Contains("안전하게 종료") || value == "stop" || value == "stop safely") return korean ? "월드를 저장하고 서버를 종료합니다. 단축키: Shift+F5" : "Save the world and stop the server. Shortcut: Shift+F5";
 		if (value == "설정" || value == "settings") return korean ? "서버 종류와 게임 설정을 변경합니다. 단축키: Ctrl+," : "Change the server type and game settings. Shortcut: Ctrl+,";
+		if (value == "런처 업데이트" || value == "launcher update") return korean ? "지금 시점의 최신 런처를 새로 확인합니다." : "Check for the latest launcher again right now.";
 		if (value.Contains("업글") || value.Contains("업데이트") || value.Contains("upgrade") || value.Contains("update")) return korean ? "서버 실행 파일을 최신 호환 빌드로 갱신합니다." : "Update the server file to the latest compatible build.";
 		if (value.Contains("콘솔") || value.Contains("console")) return korean ? "서버 로그와 명령 입력창을 열거나 닫습니다. 단축키: Ctrl+K" : "Open or close server logs and command input. Shortcut: Ctrl+K";
 		if (value.Contains("서버 관리") || value == "servers" || value.Contains("server management")) return korean ? "프로필 관리와 멀티 서버 기능을 엽니다." : "Open profiles and multi-server tools.";
@@ -392,6 +393,9 @@ internal static partial class Launcher
 			{ "Button.Players", "플레이어" },
 			{ "Button.Network", "네트워크" },
 			{ "Button.Diagnostics", "진단" },
+			{ "Button.LauncherUpdate", "런처 업데이트" },
+			{ "Notice.LauncherLatest", "현재 최신 런처를 사용하고 있습니다." },
+			{ "Notice.LauncherDeferred", "런처 업데이트를 나중으로 미뤘습니다." },
 			{ "Main.ControlSection", "서버 제어" },
 			{ "Main.ToolSection", "관리 도구" },
 			{ "Console.Search", "콘솔 검색" },
@@ -536,6 +540,9 @@ internal static partial class Launcher
 			{ "Button.Players", "Players" },
 			{ "Button.Network", "Network" },
 			{ "Button.Diagnostics", "Diagnose" },
+			{ "Button.LauncherUpdate", "Launcher update" },
+			{ "Notice.LauncherLatest", "You are using the latest launcher." },
+			{ "Notice.LauncherDeferred", "Launcher update postponed." },
 			{ "Main.ControlSection", "Server controls" },
 			{ "Main.ToolSection", "Management tools" },
 			{ "Console.Search", "Search console" },
@@ -1196,6 +1203,7 @@ internal static partial class Launcher
 		private readonly Button diagnosticsButton;
 		private readonly Button themeButton;
 		private readonly Button languageButton;
+		private readonly Button launcherUpdateButton;
 		private readonly Panel consolePanel;
 		private readonly RichTextBox consoleBox;
 		private readonly TextBox commandBox;
@@ -1217,6 +1225,7 @@ internal static partial class Launcher
 		private bool serverRunning;
 		private bool closeAfterStop;
 		private bool startupInitializing;
+		private bool launcherUpdateChecking;
 		private readonly string themePath;
 		private readonly string languagePath;
 		private string statusTextKey;
@@ -1285,6 +1294,12 @@ internal static partial class Launcher
 				ShowNoticeKey("Language.Changed", false);
 			};
 			header.Controls.Add(languageButton);
+			launcherUpdateButton = CreateButton(Localization.T("Button.LauncherUpdate"), 168);
+			launcherUpdateButton.Tag = "ghost";
+			launcherUpdateButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+			SetButtonIcon(launcherUpdateButton, ButtonIcon.Upgrade);
+			launcherUpdateButton.Click += delegate { CheckLauncherUpdateNow(); };
+			header.Controls.Add(launcherUpdateButton);
 			themeButton = CreateButton(string.Empty, 110);
 			themeButton.Tag = "ghost";
 			themeButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -1295,6 +1310,7 @@ internal static partial class Launcher
 			{
 				themeButton.Left = header.ClientSize.Width - themeButton.Width;
 				languageButton.Left = themeButton.Left - languageButton.Width - 8;
+				launcherUpdateButton.Left = languageButton.Left - launcherUpdateButton.Width - 8;
 			};
 			root.Controls.Add(header, 0, 0);
 
@@ -1738,6 +1754,10 @@ internal static partial class Launcher
 			{
 				languageButton.Text = Localization.LanguageButtonText();
 			}
+			if (launcherUpdateButton != null)
+			{
+				launcherUpdateButton.Text = Localization.T("Button.LauncherUpdate");
+			}
 			if (consoleButton != null)
 			{
 				consoleButton.Text = consolePanel.Visible ? Localization.T("Button.ConsoleClose") : Localization.T("Button.ConsoleOpen");
@@ -1898,7 +1918,60 @@ internal static partial class Launcher
 			networkButton.Enabled = enabled;
 			diagnosticsButton.Enabled = enabled;
 			playersButton.Enabled = enabled && serverRunning;
+			launcherUpdateButton.Enabled = enabled && !launcherUpdateChecking;
 			UpdateQuickCommandControls();
+		}
+
+		private void CheckLauncherUpdateNow()
+		{
+			if (launcherUpdateChecking || startupInitializing)
+			{
+				return;
+			}
+			launcherUpdateChecking = true;
+			launcherUpdateButton.Enabled = false;
+			SetLoadingState(Localization.CurrentLanguage == Localization.Korean ? "런처 최신 버전을 새로 확인하고 있습니다…" : "Checking for the latest launcher again…", true, -1);
+			Thread worker = new Thread((ThreadStart)delegate
+			{
+				bool updateStarted = false;
+				bool updateAvailable = false;
+				try
+				{
+					updateStarted = StartApprovedLauncherUpdateIfAvailable(true, out updateAvailable);
+					launcherUpdateCheckCompleted = true;
+					if (updateStarted)
+					{
+						RequestLauncherClose();
+						return;
+					}
+					ShowNoticeKey(updateAvailable ? "Notice.LauncherDeferred" : "Notice.LauncherLatest", false);
+				}
+				catch (Exception exception)
+				{
+					launcherUpdateCheckCompleted = true;
+					LauncherUpdateStageException stageException = exception as LauncherUpdateStageException;
+					string stage = stageException == null ? "unknown" : stageException.Stage;
+					string prefix = Localization.CurrentLanguage == Localization.Korean
+						? (stage == "connection" ? "업데이트 서버 연결 실패: " : stage == "metadata" ? "업데이트 정보 오류: " : stage == "download" ? "업데이트 다운로드 실패: " : stage == "hash" ? "업데이트 해시 불일치: " : "업데이트 실패: ")
+						: (stage == "connection" ? "Update server unavailable: " : stage == "metadata" ? "Invalid update metadata: " : stage == "download" ? "Update download failed: " : stage == "hash" ? "Update hash mismatch: " : "Update failed: ");
+					ShowNotice(prefix + exception.Message, true);
+				}
+				finally
+				{
+					if (!updateStarted && !IsDisposed)
+					{
+						TryPostToUi(this, (MethodInvoker)delegate
+						{
+							launcherUpdateChecking = false;
+							launcherUpdateButton.Enabled = true;
+							SetLoadingState(string.Empty, false, -1);
+						});
+					}
+				}
+			});
+			worker.IsBackground = true;
+			worker.Name = "런처 업데이트 수동 확인";
+			worker.Start();
 		}
 
 		public void SetLoadingState(string message, bool active, int percent)

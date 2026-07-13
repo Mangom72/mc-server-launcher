@@ -16,7 +16,6 @@ $dependencyDirectory = Join-Path $projectRoot '.build\dependencies'
 if (!$SkipCompile -and !$SkipDependencyDownload) {
     & (Join-Path $projectRoot 'scripts\Prepare-BuildResources.ps1') -DestinationDirectory $dependencyDirectory | Out-Null
 }
-$javaZip = Join-Path $dependencyDirectory 'Paper26_2.java25.zip'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 $portableExe = Join-Path $output 'MineHarbor.exe'
 $legacyPortableExe = Join-Path $output 'Minecraft-Server-Launcher.exe'
@@ -45,11 +44,10 @@ $arguments = @(
     '/reference:System.dll', '/reference:System.Core.dll', '/reference:System.Drawing.dll',
     '/reference:System.Windows.Forms.dll', '/reference:System.Web.Extensions.dll',
     '/reference:System.IO.Compression.dll', '/reference:System.IO.Compression.FileSystem.dll',
-    "/resource:$javaZip,Paper26_2.java25.zip",
     "/out:$portableExe"
 ) + $sources
 if (!$SkipCompile) {
-	foreach ($dependency in @($javaZip, (Join-Path $dependencyDirectory 'paper-api-26.2.build.56-alpha.jar'), (Join-Path $dependencyDirectory 'adventure-api-5.2.0.jar'), (Join-Path $dependencyDirectory 'adventure-key-5.2.0.jar'))) {
+	foreach ($dependency in @((Join-Path $dependencyDirectory 'paper-api-26.2.build.56-alpha.jar'), (Join-Path $dependencyDirectory 'adventure-api-5.2.0.jar'), (Join-Path $dependencyDirectory 'adventure-key-5.2.0.jar'))) {
         if (!(Test-Path -LiteralPath $dependency)) { throw "Missing build dependency: $dependency" }
     }
     $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'

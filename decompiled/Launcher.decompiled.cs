@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
@@ -201,13 +202,9 @@ internal static partial class Launcher
 		public string MacAddress;
 	}
 
-	private const string JavaResourceName = "Paper26_2.java25.zip";
-
 	private const long AdminPluginJarSize = 3873L;
 
 	private const string AdminPluginJarSha256 = "627bba2a51ae1e7e77acde106d06ff4293a67a5811ddf25f9b072500dd649b67";
-
-	private const string JavaZipSha256 = "709312cd0420296d9b9de917fe6e28a5b979e875ee5ab91783fb79bcd5857235";
 
 	private const string MutexName = "Local\\MineHarbor.MinecraftServerLauncher";
 
@@ -228,6 +225,13 @@ internal static partial class Launcher
 	private const string MultiServerRootDirectoryName = "Minecraft-Servers-Data";
 
 	private const string LauncherReleaseAssetName = "MineHarbor.exe";
+
+	private const string LauncherUpdatePreferencesFileName = "launcher-update-preferences.properties";
+
+	private const long MinimumLauncherAssetSize = 262144L;
+
+	// 테스트가 실제 사용자 업데이트 설정을 건드리지 않도록 경로만 교체하는 내부 지점입니다.
+	private static string LauncherUpdatePreferencesPathOverride = null;
 
 	private const string LegacyLauncherReleaseAssetName = "Minecraft-Server-Launcher.exe";
 
@@ -330,12 +334,25 @@ internal static partial class Launcher
 
 	private static bool StartApprovedLauncherUpdateIfAvailable()
 	{
+		bool updateAvailable;
+		return StartApprovedLauncherUpdateIfAvailable(false, out updateAvailable);
+	}
+
+	private static bool StartApprovedLauncherUpdateIfAvailable(bool manualRequest, out bool updateAvailable)
+	{
 		Console.WriteLine("런처 최신 버전을 확인하는 중...");
 		ReportLauncherLoading(LauncherUiText("런처 최신 버전을 확인하고 있습니다…", "Checking for launcher updates…"), 10);
 		LauncherReleaseAsset latestLauncherReleaseAsset = GetLatestLauncherReleaseAsset();
 		if (!IsLauncherUpdateNewer(latestLauncherReleaseAsset, BuildVersionInfo.ProductVersion, BuildVersionInfo.BuildNumber))
 		{
+			updateAvailable = false;
 			Console.WriteLine("런처가 최신 버전입니다.");
+			return false;
+		}
+		updateAvailable = true;
+		if (!manualRequest && IsLauncherUpdateIgnored(latestLauncherReleaseAsset))
+		{
+			Console.WriteLine("사용자가 이 런처 버전의 자동 업데이트 알림을 숨겼습니다.");
 			return false;
 		}
 		if (!ConfirmLauncherUpdate(latestLauncherReleaseAsset))
@@ -395,18 +412,112 @@ internal static partial class Launcher
 		{
 			bool korean = string.Equals(Localization.CurrentLanguage, Localization.Korean, StringComparison.OrdinalIgnoreCase);
 			string notes = string.IsNullOrWhiteSpace(asset.ReleaseNotes) ? (korean ? "변경 사항이 제공되지 않았습니다." : "No release notes were provided.") : asset.ReleaseNotes.Trim();
-			if (notes.Length > 1600) notes = notes.Substring(0, 1600) + "…";
+			if (notes.Length > 3000) notes = notes.Substring(0, 3000) + "…";
 			Version currentProduct;
 			Version minimumProduct;
 			string compatibilityNotice = string.Empty;
 			if (TryParseProductVersion(BuildVersionInfo.ProductVersion, out currentProduct) && TryParseProductVersion(asset.MinimumSupportedVersion, out minimumProduct) && currentProduct.CompareTo(minimumProduct) < 0)
 			{
-				compatibilityNotice = korean ? "\r\n주의: 현재 버전은 새 버전의 최소 지원 범위보다 오래됐습니다.\r\n" : "\r\nWarning: the current version is older than the new release's supported upgrade range.\r\n";
+				compatibilityNotice = korean ? "주의: 현재 버전은 새 버전의 최소 지원 범위보다 오래됐습니다." : "Warning: the current version is older than the new release's supported upgrade range.";
 			}
-			string message = korean
-				? "새 런처를 사용할 수 있습니다.\r\n\r\n현재 버전: v" + BuildVersionInfo.ProductVersion + "\r\n새 버전: v" + asset.ProductVersion + "\r\n빌드 번호: " + asset.BuildNumber + "\r\n다운로드 크기: " + FormatLauncherFileSize(asset.Size) + compatibilityNotice + "\r\n주요 변경 사항\r\n" + notes + "\r\n\r\n지금 업데이트할까요?"
-				: "A launcher update is available.\r\n\r\nCurrent version: v" + BuildVersionInfo.ProductVersion + "\r\nNew version: v" + asset.ProductVersion + "\r\nBuild: " + asset.BuildNumber + "\r\nDownload size: " + FormatLauncherFileSize(asset.Size) + compatibilityNotice + "\r\nRelease notes\r\n" + notes + "\r\n\r\nUpdate now?";
-			return MessageBox.Show(launcherForm, message, korean ? "런처 업데이트" : "Launcher update", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes;
+			using (Form dialog = new Form())
+			{
+				ApplyLauncherWindowIcon(dialog);
+				dialog.Text = korean ? "런처 업데이트" : "Launcher update";
+				dialog.StartPosition = FormStartPosition.CenterParent;
+				dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+				dialog.MinimizeBox = false;
+				dialog.MaximizeBox = false;
+				dialog.ShowInTaskbar = false;
+				dialog.ClientSize = new Size(580, 490);
+				dialog.Font = new Font("Segoe UI Variable Text", 10F);
+				bool dark = launcherForm != null && launcherForm.UsesDarkTheme;
+				Color window = dark ? Color.FromArgb(20, 21, 26) : Color.FromArgb(248, 249, 252);
+				Color surface = dark ? Color.FromArgb(31, 32, 39) : Color.White;
+				Color textColor = dark ? Color.FromArgb(244, 246, 250) : Color.FromArgb(25, 31, 40);
+				Color muted = dark ? Color.FromArgb(171, 176, 188) : Color.FromArgb(91, 99, 113);
+				dialog.BackColor = window;
+
+				Label heading = new Label();
+				heading.Text = korean ? "새 런처를 사용할 수 있어요" : "A new launcher is available";
+				heading.Font = new Font(dialog.Font.FontFamily, 18F, FontStyle.Bold);
+				heading.ForeColor = textColor;
+				heading.AutoSize = true;
+				heading.Location = new Point(24, 22);
+				dialog.Controls.Add(heading);
+
+				Label summary = new Label();
+				summary.Text = korean
+					? "v" + BuildVersionInfo.ProductVersion + "  →  v" + asset.ProductVersion + "  ·  " + FormatLauncherFileSize(asset.Size)
+					: "v" + BuildVersionInfo.ProductVersion + "  →  v" + asset.ProductVersion + "  ·  " + FormatLauncherFileSize(asset.Size);
+				summary.ForeColor = muted;
+				summary.AutoSize = true;
+				summary.Location = new Point(27, 63);
+				dialog.Controls.Add(summary);
+
+				Label notesLabel = new Label();
+				notesLabel.Text = korean ? "주요 변경 사항" : "What's new";
+				notesLabel.ForeColor = textColor;
+				notesLabel.AutoSize = true;
+				notesLabel.Location = new Point(24, 98);
+				dialog.Controls.Add(notesLabel);
+
+				RichTextBox notesBox = new RichTextBox();
+				notesBox.ReadOnly = true;
+				notesBox.BorderStyle = BorderStyle.None;
+				notesBox.BackColor = surface;
+				notesBox.ForeColor = textColor;
+				notesBox.Location = new Point(24, 124);
+				notesBox.Size = new Size(532, 238);
+				notesBox.Text = notes;
+				notesBox.TabStop = true;
+				dialog.Controls.Add(notesBox);
+
+				Label compatibility = new Label();
+				compatibility.Text = compatibilityNotice;
+				compatibility.ForeColor = Color.FromArgb(230, 143, 38);
+				compatibility.AutoSize = true;
+				compatibility.Location = new Point(24, 369);
+				compatibility.Visible = !string.IsNullOrEmpty(compatibilityNotice);
+				dialog.Controls.Add(compatibility);
+
+				CheckBox ignoreBox = new CheckBox();
+				ignoreBox.Name = "launcherUpdateIgnoreCheckBox";
+				ignoreBox.Text = korean ? "이 버전은 다시 보지 않기" : "Don't show this version again";
+				ignoreBox.ForeColor = textColor;
+				ignoreBox.BackColor = window;
+				ignoreBox.AutoSize = true;
+				ignoreBox.Checked = IsLauncherUpdateIgnored(asset);
+				ignoreBox.Location = new Point(24, 401);
+				dialog.Controls.Add(ignoreBox);
+
+				Button later = new Button();
+				later.Text = korean ? "나중에" : "Later";
+				later.DialogResult = DialogResult.No;
+				later.Size = new Size(108, 42);
+				later.Location = new Point(326, 435);
+				later.FlatStyle = FlatStyle.Flat;
+				later.ForeColor = textColor;
+				later.BackColor = surface;
+				dialog.Controls.Add(later);
+
+				Button update = new Button();
+				update.Text = korean ? "지금 업데이트" : "Update now";
+				update.DialogResult = DialogResult.Yes;
+				update.Size = new Size(122, 42);
+				update.Location = new Point(440, 435);
+				update.FlatStyle = FlatStyle.Flat;
+				update.FlatAppearance.BorderSize = 0;
+				update.ForeColor = Color.White;
+				update.BackColor = Color.FromArgb(48, 129, 247);
+				dialog.Controls.Add(update);
+				dialog.AcceptButton = update;
+				dialog.CancelButton = later;
+
+				DialogResult result = dialog.ShowDialog(launcherForm);
+				SetLauncherUpdateIgnored(asset, result != DialogResult.Yes && ignoreBox.Checked);
+				return result == DialogResult.Yes;
+			}
 		};
 		LauncherForm form = launcherForm;
 		if (form != null && !form.IsDisposed && form.IsHandleCreated && form.InvokeRequired)
@@ -414,6 +525,46 @@ internal static partial class Launcher
 			return (bool)form.Invoke(ask);
 		}
 		return ask();
+	}
+
+	private static string GetLauncherUpdatePreferencesPath()
+	{
+		if (!string.IsNullOrEmpty(LauncherUpdatePreferencesPathOverride)) return Path.GetFullPath(LauncherUpdatePreferencesPathOverride);
+		return Path.Combine(GetLauncherUserDataDirectory(), LauncherUpdatePreferencesFileName);
+	}
+
+	private static bool IsLauncherUpdateIgnored(LauncherReleaseAsset asset)
+	{
+		if (asset == null) return false;
+		Dictionary<string, string> values = ReadSimpleProperties(GetLauncherUpdatePreferencesPath());
+		string product;
+		string build;
+		return values.TryGetValue("ignored-version", out product) && values.TryGetValue("ignored-build", out build)
+			&& string.Equals(product, asset.ProductVersion, StringComparison.Ordinal)
+			&& string.Equals(build, asset.BuildNumber, StringComparison.Ordinal);
+	}
+
+	private static void SetLauncherUpdateIgnored(LauncherReleaseAsset asset, bool ignored)
+	{
+		string path = GetLauncherUpdatePreferencesPath();
+		if (!ignored)
+		{
+			try { if (File.Exists(path)) File.Delete(path); } catch { }
+			return;
+		}
+		if (asset == null) return;
+		Directory.CreateDirectory(Path.GetDirectoryName(path));
+		string temporary = path + ".tmp";
+		try
+		{
+			File.WriteAllText(temporary, "ignored-version=" + asset.ProductVersion + "\r\nignored-build=" + asset.BuildNumber + "\r\n", new UTF8Encoding(false));
+			if (File.Exists(path)) File.Delete(path);
+			File.Move(temporary, path);
+		}
+		finally
+		{
+			try { if (File.Exists(temporary)) File.Delete(temporary); } catch { }
+		}
 	}
 
 	private static bool IsLauncherUpdateNewer(LauncherReleaseAsset asset, string currentProductText, string currentBuildText)
@@ -508,7 +659,7 @@ internal static partial class Launcher
 		Version minimumVersion;
 		Version buildVersion;
 		if (!TryParseProductVersion(productVersion, out product) || !TryParseProductVersion(minimum, out minimumVersion) || !Version.TryParse(build, out buildVersion)) throw new InvalidDataException("업데이트 버전 정보가 올바르지 않습니다.");
-		if (!IsValidSha256(sha) || size < 1048576 || size > 1073741824 || !IsAllowedLauncherDownloadUrl(url)) throw new InvalidDataException("업데이트 다운로드 정보가 안전하지 않습니다.");
+		if (!IsValidSha256(sha) || size < MinimumLauncherAssetSize || size > 1073741824 || !IsAllowedLauncherDownloadUrl(url)) throw new InvalidDataException("업데이트 다운로드 정보가 안전하지 않습니다.");
 		LauncherReleaseAsset asset = new LauncherReleaseAsset();
 		asset.Url = url;
 		asset.Sha256 = sha;
@@ -578,7 +729,7 @@ internal static partial class Launcher
 					throw new InvalidDataException("GitHub 릴리스 파일의 상태 또는 SHA-256 정보를 검증하지 못했습니다.");
 				}
 				string text2 = text.Substring(7);
-				if (!IsValidSha256(text2) || num < 1048576 || num > 1073741824 || !IsAllowedLauncherDownloadUrl(url))
+				if (!IsValidSha256(text2) || num < MinimumLauncherAssetSize || num > 1073741824 || !IsAllowedLauncherDownloadUrl(url))
 				{
 					throw new InvalidDataException("GitHub 릴리스 파일의 다운로드 정보를 검증하지 못했습니다.");
 				}
@@ -1161,45 +1312,16 @@ internal static partial class Launcher
 		return launcherOptions;
 	}
 
-	private static string PrepareBundledJavaRuntime()
+	private static string FindLegacyJava25Runtime()
 	{
 		string text2 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Paper26.2Server");
 		string text3 = Path.Combine(text2, "Java25");
-		Directory.CreateDirectory(text2);
 		string text4 = FindJava(text3);
 		if (text4 != null)
 		{
 			return text4;
 		}
-		Console.WriteLine("Java 25 런타임을 준비하는 중입니다. 최초 한 번만 진행됩니다.");
-		string text5 = Path.Combine(text2, "Java25.zip");
-		string text6 = text3 + ".준비중";
-		try
-		{
-			ExtractResource("Paper26_2.java25.zip", text5);
-			Console.WriteLine("Java 25 런타임 무결성을 확인하는 중...");
-			if (!HashMatches(text5, "3404a8be08f0fdbbd24c9bbdda79ba1ded87b264a833247b2124ac45da1c16e0"))
-			{
-				throw new InvalidDataException("내장 Java 25 런타임의 SHA-256 검증에 실패했습니다.");
-			}
-			DeleteDirectoryIfPresent(text6);
-			Directory.CreateDirectory(text6);
-			ZipFile.ExtractToDirectory(text5, text6);
-			File.WriteAllText(Path.Combine(text6, ".launcher-java-sha256"), "3404a8be08f0fdbbd24c9bbdda79ba1ded87b264a833247b2124ac45da1c16e0", Encoding.ASCII);
-			DeleteDirectoryIfPresent(text3);
-			Directory.Move(text6, text3);
-		}
-		finally
-		{
-			DeleteFileIfPresent(text5);
-			DeleteDirectoryIfPresent(text6);
-		}
-		text4 = FindJava(text3);
-		if (text4 == null)
-		{
-			throw new FileNotFoundException("추출된 Java 실행 파일을 찾을 수 없습니다.");
-		}
-		return text4;
+		throw new FileNotFoundException("기존 Java 25 캐시가 없습니다.");
 	}
 
 	private static void ApplyServerPreset(ServerSettings settings, string preset)
@@ -2956,33 +3078,6 @@ internal static partial class Launcher
 					}
 					return streamReader.ReadToEnd();
 				}
-			}
-		}
-	}
-
-	private static void ExtractResource(string resourceName, string destinationPath)
-	{
-		using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName))
-		{
-			if (stream == null)
-			{
-				throw new InvalidDataException("내장 리소스를 찾을 수 없습니다: " + resourceName);
-			}
-			string text = destinationPath + ".준비중";
-			DeleteFileIfPresent(text);
-			try
-			{
-				using (FileStream fileStream = new FileStream(text, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-				{
-					stream.CopyTo(fileStream, 1048576);
-					fileStream.Flush(true);
-				}
-				DeleteFileIfPresent(destinationPath);
-				File.Move(text, destinationPath);
-			}
-			finally
-			{
-				DeleteFileIfPresent(text);
 			}
 		}
 	}

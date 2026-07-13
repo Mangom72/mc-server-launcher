@@ -30,6 +30,7 @@ internal static class LauncherTests
 			TestVersionSeparation(assembly);
 			TestProductVersionParsing();
 			TestUpdateMetadataParsing();
+			TestLauncherUpdatePreferences(temporary);
 			TestLauncherUpdateDirectoryCompatibility();
 			TestHashAndReplacement(temporary);
 			TestMockedDownload(temporary);
@@ -60,6 +61,7 @@ internal static class LauncherTests
 		finally
 		{
 			SetStaticField("StorageSettingsPathOverride", null);
+			SetStaticField("LauncherUpdatePreferencesPathOverride", null);
 			SetStaticField("BridgeArtifactOverridePath", null);
 			SetStaticField("BridgeInstallFailureAfterBackup", false);
 			if (Directory.Exists(temporary)) Directory.Delete(temporary, true);
@@ -83,6 +85,7 @@ internal static class LauncherTests
 		foreach (string resourceName in assembly.GetManifestResourceNames())
 		{
 			if (resourceName.IndexOf("paper.jar", StringComparison.OrdinalIgnoreCase) >= 0) throw new InvalidOperationException("Paper 서버 JAR이 실행 파일에 남아 있습니다.");
+			if (resourceName.IndexOf("java25", StringComparison.OrdinalIgnoreCase) >= 0) throw new InvalidOperationException("Java 25 런타임이 실행 파일에 남아 있습니다.");
 		}
 		Pass();
 	}
@@ -116,6 +119,28 @@ internal static class LauncherTests
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { "{}" }); }, "누락된 업데이트 메타데이터");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { json.Replace(hash, "bad") }); }, "잘못된 업데이트 해시");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { json.Replace("https://github.com/Mangom72/", "http://example.com/") }); }, "허용되지 않은 업데이트 주소");
+		string compactJson = json.Replace("2097152", "300000");
+		Equal("0.4.2", Convert.ToString(GetField(Invoke("ParseLauncherUpdateMetadata", new object[] { compactJson }), "ProductVersion")), "경량 런처 업데이트 허용");
+		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { json.Replace("2097152", "200000") }); }, "비정상적으로 작은 런처 업데이트 차단");
+		Pass();
+	}
+
+	private static void TestLauncherUpdatePreferences(string root)
+	{
+		string path = Path.Combine(root, "launcher-update-preferences.properties");
+		SetStaticField("LauncherUpdatePreferencesPathOverride", path);
+		Type type = launcher.GetNestedType("LauncherReleaseAsset", BindingFlags.NonPublic);
+		object first = Activator.CreateInstance(type, true);
+		SetPublic(first, "ProductVersion", "1.3.0");
+		SetPublic(first, "BuildNumber", "26.2.45.35");
+		Invoke("SetLauncherUpdateIgnored", new object[] { first, true });
+		Equal(true, Invoke("IsLauncherUpdateIgnored", new object[] { first }), "선택한 업데이트 다시 알리지 않기 저장");
+		object next = Activator.CreateInstance(type, true);
+		SetPublic(next, "ProductVersion", "1.4.0");
+		SetPublic(next, "BuildNumber", "26.2.45.36");
+		Equal(false, Invoke("IsLauncherUpdateIgnored", new object[] { next }), "다음 업데이트는 다시 표시");
+		Invoke("SetLauncherUpdateIgnored", new object[] { first, false });
+		Equal(false, File.Exists(path), "업데이트 알림 숨김 해제");
 		Pass();
 	}
 
@@ -412,7 +437,7 @@ internal static class LauncherTests
 				languageField.SetValue(null, language);
 				applyLocalization.Invoke(form, null);
 				form.PerformLayout();
-				foreach (string fieldName in new string[] { "startButton", "stopButton", "settingsButton", "upgradeButton", "consoleButton", "profilesButton", "backupButton", "contentButton", "playersButton", "networkButton", "diagnosticsButton" })
+				foreach (string fieldName in new string[] { "startButton", "stopButton", "settingsButton", "upgradeButton", "consoleButton", "profilesButton", "backupButton", "contentButton", "playersButton", "networkButton", "diagnosticsButton", "launcherUpdateButton" })
 				{
 					Button action = (Button)GetPrivateField(formType, form, fieldName);
 					Size measured = TextRenderer.MeasureText(action.Text, action.Font, new Size(Math.Max(1, action.Width - 45), action.Height), TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);

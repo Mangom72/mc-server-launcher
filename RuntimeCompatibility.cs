@@ -116,44 +116,41 @@ internal static partial class Launcher
 		{
 			try
 			{
-				string bundledJavaPath = PrepareBundledJavaRuntime();
+				string bundledJavaPath = FindLegacyJava25Runtime();
 				JavaExecutableProbe bundledProbe = ProbeJavaExecutable(bundledJavaPath, requirement.MajorVersion);
 				if (!bundledProbe.IsValid)
 				{
-					throw new InvalidDataException("내장 Java 25 검증 실패: " + bundledProbe.Error);
+					throw new InvalidDataException("기존 Java 25 캐시 검증 실패: " + bundledProbe.Error);
 				}
-				return CreateCompatibleJavaRuntime(requirement, bundledJavaPath, bundledProbe, "내장 Java 25", true, false);
+				return CreateCompatibleJavaRuntime(requirement, bundledJavaPath, bundledProbe, "기존 Java 25 캐시", false, false);
 			}
 			catch (Exception ex)
 			{
-				preparationErrors.Add("내장 Java 25: " + SummarizeRuntimeCompatibilityError(ex));
+				preparationErrors.Add("기존 Java 25 캐시: " + SummarizeRuntimeCompatibilityError(ex));
 			}
 		}
-		else
+		try
 		{
-			try
+			string runtimesRoot = GetCompatibleRuntimesRoot(serversRoot);
+			lock (RuntimeCompatibilityPreparationLock)
 			{
-				string runtimesRoot = GetCompatibleRuntimesRoot(serversRoot);
-				lock (RuntimeCompatibilityPreparationLock)
+				CompatibleJavaRuntime cachedRuntime = TryGetCachedCompatibleRuntime(requirement, runtimesRoot);
+				if (cachedRuntime != null)
 				{
-					CompatibleJavaRuntime cachedRuntime = TryGetCachedCompatibleRuntime(requirement, runtimesRoot);
-					if (cachedRuntime != null)
-					{
-						return cachedRuntime;
-					}
-					string downloadedJavaPath = PrepareAdoptiumRuntime(requirement.MajorVersion, runtimesRoot);
-					JavaExecutableProbe downloadedProbe = ProbeJavaExecutable(downloadedJavaPath, requirement.MajorVersion);
-					if (!downloadedProbe.IsValid)
-					{
-						throw new InvalidDataException("다운로드한 Java 검증 실패: " + downloadedProbe.Error);
-					}
-					return CreateCompatibleJavaRuntime(requirement, downloadedJavaPath, downloadedProbe, "Eclipse Temurin 캐시", false, false);
+					return cachedRuntime;
 				}
+				string downloadedJavaPath = PrepareAdoptiumRuntime(requirement.MajorVersion, runtimesRoot);
+				JavaExecutableProbe downloadedProbe = ProbeJavaExecutable(downloadedJavaPath, requirement.MajorVersion);
+				if (!downloadedProbe.IsValid)
+				{
+					throw new InvalidDataException("다운로드한 Java 검증 실패: " + downloadedProbe.Error);
+				}
+				return CreateCompatibleJavaRuntime(requirement, downloadedJavaPath, downloadedProbe, "Eclipse Temurin 캐시", false, false);
 			}
-			catch (Exception ex2)
-			{
-				preparationErrors.Add("Eclipse Adoptium 런타임: " + SummarizeRuntimeCompatibilityError(ex2));
-			}
+		}
+		catch (Exception ex2)
+		{
+			preparationErrors.Add("Eclipse Adoptium 런타임: " + SummarizeRuntimeCompatibilityError(ex2));
 		}
 
 		List<string> systemDiagnostics;
