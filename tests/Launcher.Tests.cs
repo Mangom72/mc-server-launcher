@@ -498,6 +498,23 @@ internal static class LauncherTests
 			}
 			Equal(3, weatherCount, "날씨 명령 그룹 개수");
 			Equal(4, difficultyCount, "난이도 명령 그룹 개수");
+			Dictionary<string, object> bridgeMessage = new Dictionary<string, object>();
+			bridgeMessage["commands"] = new object[]
+			{
+				new Dictionary<string, object> { { "name", "home" }, { "usage", "/home" }, { "description", "Return home" }, { "plugin", "EssentialsX" } },
+				new Dictionary<string, object> { { "name", "version" }, { "usage", "/version" }, { "description", "Server version" }, { "plugin", "" } }
+			};
+			IEnumerable parsedBridgeCommands = (IEnumerable)Invoke("ParseBridgeCommands", new object[] { bridgeMessage });
+			object homeSuggestion = FindSuggestion(parsedBridgeCommands, "home");
+			Equal("EssentialsX", Convert.ToString(GetField(homeSuggestion, "Plugin")), "브리지 플러그인 소유자 보존");
+			IEnumerable bridgeDefinitions = (IEnumerable)Invoke("BuildBridgeQuickCommandDefinitions", new object[] { parsedBridgeCommands });
+			int bridgeDefinitionCount = 0; foreach (object ignored in bridgeDefinitions) bridgeDefinitionCount++;
+			Equal(1, bridgeDefinitionCount, "소유자 없는 서버 명령 플러그인 목록 중복 차단");
+			IEnumerable pluginPickerItems = (IEnumerable)Invoke("BuildQuickCommandPickerItems", new object[] { bridgeDefinitions, "paper" });
+			object homePickerItem = FindQuickCommandPickerItem(pluginPickerItems, "home");
+			Equal("plugin", Convert.ToString(GetField(homePickerItem, "CategoryKey")), "외부 명령 플러그인 카테고리");
+			Equal("EssentialsX", Convert.ToString(GetField(homePickerItem, "GroupName")), "외부 명령 플러그인별 그룹화");
+			Equal("플러그인 › EssentialsX › home", Convert.ToString(GetField(homePickerItem, "CategoryName")) + " › " + Convert.ToString(GetField(homePickerItem, "GroupName")) + " › " + Convert.ToString(GetField(homePickerItem, "LeafName")), "외부 명령 계층 경로");
 			pickerLanguageField.SetValue(null, "en");
 			IEnumerable englishBuiltIns = (IEnumerable)Invoke("GetBuiltInQuickCommands", new object[0]);
 			IEnumerable englishPickerItems = (IEnumerable)Invoke("BuildQuickCommandPickerItems", new object[] { englishBuiltIns, "paper" });

@@ -70,6 +70,13 @@ internal static partial class Launcher
 		{
 			int comparison = GetQuickCommandPickerCategoryOrder(left.CategoryKey).CompareTo(GetQuickCommandPickerCategoryOrder(right.CategoryKey));
 			if (comparison != 0) return comparison;
+			if (left.CategoryKey == "plugin")
+			{
+				comparison = string.Compare(left.GroupName, right.GroupName, StringComparison.CurrentCultureIgnoreCase);
+				if (comparison != 0) return comparison;
+				comparison = string.Compare(left.LeafName, right.LeafName, StringComparison.CurrentCultureIgnoreCase);
+				if (comparison != 0) return comparison;
+			}
 			comparison = GetQuickCommandPickerGroupOrder(left.CategoryKey, left.GroupKey).CompareTo(GetQuickCommandPickerGroupOrder(right.CategoryKey, right.GroupKey));
 			if (comparison != 0) return comparison;
 			return left.Order.CompareTo(right.Order);
@@ -79,8 +86,10 @@ internal static partial class Launcher
 
 	private static string NormalizeQuickCommandPickerCategory(string category)
 	{
-		string value = (category ?? string.Empty).Trim().ToLowerInvariant();
-		return new string[] { "server", "player", "whitelist", "world", "info", "user" }.Contains(value) ? value : "user";
+		string raw = (category ?? string.Empty).Trim();
+		if (raw.StartsWith("plugin:", StringComparison.OrdinalIgnoreCase) && raw.Substring("plugin:".Length).Trim().Length > 0) return "plugin";
+		string value = raw.ToLowerInvariant();
+		return new string[] { "server", "player", "whitelist", "world", "plugin", "info", "user" }.Contains(value) ? value : "user";
 	}
 
 	private static string GetQuickCommandPickerCategoryName(string category)
@@ -89,6 +98,7 @@ internal static partial class Launcher
 		if (category == "player") return LauncherUiText("플레이어", "Players");
 		if (category == "whitelist") return LauncherUiText("화이트리스트", "Whitelist");
 		if (category == "world") return LauncherUiText("월드", "World");
+		if (category == "plugin") return LauncherUiText("플러그인", "Plugins");
 		if (category == "info") return LauncherUiText("정보", "Information");
 		return LauncherUiText("사용자 명령", "User commands");
 	}
@@ -96,6 +106,7 @@ internal static partial class Launcher
 	private static string GetQuickCommandPickerGroupKey(QuickCommandDefinition definition, string category)
 	{
 		if (string.Equals(definition.Source, "user", StringComparison.OrdinalIgnoreCase) || category == "user") return "custom";
+		if (category == "plugin") return "plugin:" + definition.Category.Substring(definition.Category.IndexOf(':') + 1).Trim();
 		string command = NormalizeCommandForSend(definition.Template).ToLowerInvariant();
 		if (category == "server")
 		{
@@ -139,6 +150,7 @@ internal static partial class Launcher
 
 	private static string GetQuickCommandPickerGroupName(string category, string group)
 	{
+		if (category == "plugin" && group.StartsWith("plugin:", StringComparison.OrdinalIgnoreCase)) return group.Substring("plugin:".Length).Trim();
 		if (group == "custom") return LauncherUiText("사용자 명령", "User commands");
 		if (group == "status") return LauncherUiText("상태", "Status");
 		if (group == "save") return LauncherUiText("저장", "Saving");
@@ -167,6 +179,7 @@ internal static partial class Launcher
 	private static string GetQuickCommandPickerLeafName(QuickCommandDefinition definition, string category, string group)
 	{
 		string command = NormalizeCommandForSend(definition.Template);
+		if (category == "plugin") return string.IsNullOrWhiteSpace(definition.Name) ? command : definition.Name;
 		string[] parts = command.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 		string value = parts.Length == 0 ? string.Empty : parts[parts.Length - 1].ToLowerInvariant();
 		if (category == "world" && group == "time")
@@ -194,7 +207,7 @@ internal static partial class Launcher
 
 	private static int GetQuickCommandPickerCategoryOrder(string category)
 	{
-		int index = Array.IndexOf(new string[] { "server", "player", "whitelist", "world", "info", "user" }, category);
+		int index = Array.IndexOf(new string[] { "server", "player", "whitelist", "world", "plugin", "info", "user" }, category);
 		return index < 0 ? 100 : index;
 	}
 
@@ -205,6 +218,7 @@ internal static partial class Launcher
 		else if (category == "player") order = new string[] { "gamemode", "teleport", "items", "experience", "effects", "permissions", "moderation", "custom" };
 		else if (category == "whitelist") order = new string[] { "players", "settings", "custom" };
 		else if (category == "world") order = new string[] { "time", "weather", "difficulty", "gamemode", "rules", "spawn", "custom" };
+		else if (category == "plugin") order = new string[0];
 		else if (category == "info") order = new string[] { "help", "server-info", "content", "custom" };
 		else order = new string[] { "custom" };
 		int index = Array.IndexOf(order, group);
@@ -229,6 +243,7 @@ internal static partial class Launcher
 	private sealed class RoundedPickerScrollBar : Control
 	{
 		private readonly ListBox target;
+		private readonly ColumnStyle reservedColumn;
 		private readonly Color trackColor;
 		private readonly Color thumbColor;
 		private readonly Color thumbHoverColor;
@@ -236,9 +251,10 @@ internal static partial class Launcher
 		private bool hovering;
 		private int dragOffset;
 
-		public RoundedPickerScrollBar(ListBox targetList, ThemePalette palette)
+		public RoundedPickerScrollBar(ListBox targetList, ThemePalette palette, ColumnStyle scrollColumn)
 		{
 			target = targetList;
+			reservedColumn = scrollColumn;
 			bool dark = palette.Window.GetBrightness() < 0.5F;
 			trackColor = SystemInformation.HighContrast ? palette.CardSecondary : (dark ? Color.FromArgb(25, 25, 30) : Color.FromArgb(228, 232, 237));
 			thumbColor = SystemInformation.HighContrast ? palette.Border : (dark ? Color.FromArgb(92, 94, 103) : Color.FromArgb(151, 162, 175));
@@ -254,6 +270,14 @@ internal static partial class Launcher
 
 		public void RefreshScrollState()
 		{
+			bool needed = GetMaximumTopIndex() > 0;
+			if (Visible != needed) Visible = needed;
+			float nextWidth = needed ? 18F : 0F;
+			if (Math.Abs(reservedColumn.Width - nextWidth) > 0.1F)
+			{
+				reservedColumn.Width = nextWidth;
+				if (Parent != null) Parent.PerformLayout();
+			}
 			Invalidate();
 		}
 
@@ -370,7 +394,7 @@ internal static partial class Launcher
 
 		private void TargetScrollChanged(object sender, EventArgs eventArgs)
 		{
-			Invalidate();
+			RefreshScrollState();
 		}
 
 		private Rectangle GetTrackBounds()
@@ -542,9 +566,9 @@ internal static partial class Launcher
 			body.Dock = DockStyle.Fill;
 			body.ColumnCount = 3;
 			body.RowCount = 1;
-			body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24F));
+			body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 26F));
 			body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 27F));
-			body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 49F));
+			body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 47F));
 			root.Controls.Add(body, 0, 3);
 
 			categoryList = CreatePickerList(46);
@@ -671,8 +695,9 @@ internal static partial class Launcher
 			listLayout.ColumnCount = 2;
 			listLayout.RowCount = 1;
 			listLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-			listLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 18F));
-			RoundedPickerScrollBar scrollBar = new RoundedPickerScrollBar(list, palette);
+			ColumnStyle scrollColumn = new ColumnStyle(SizeType.Absolute, 0F);
+			listLayout.ColumnStyles.Add(scrollColumn);
+			RoundedPickerScrollBar scrollBar = new RoundedPickerScrollBar(list, palette, scrollColumn);
 			scrollBar.Dock = DockStyle.Fill;
 			scrollBar.Margin = new Padding(0);
 			scrollBars.Add(scrollBar);
@@ -879,10 +904,12 @@ internal static partial class Launcher
 			QuickCommandPickerGroup group = list.Items[eventArgs.Index] as QuickCommandPickerGroup;
 			if (group != null)
 			{
-				Rectangle countBounds = new Rectangle(bounds.Right - 34, bounds.Top, 34, bounds.Height);
-				Rectangle textBounds = new Rectangle(bounds.Left, bounds.Top, Math.Max(1, bounds.Width - 42), bounds.Height);
+				string countText = group.Count.ToString();
+				int countWidth = Math.Max(22, TextRenderer.MeasureText(eventArgs.Graphics, countText, Font, Size.Empty, TextFormatFlags.NoPadding).Width + 6);
+				Rectangle countBounds = new Rectangle(bounds.Right - countWidth, bounds.Top, countWidth, bounds.Height);
+				Rectangle textBounds = new Rectangle(bounds.Left, bounds.Top, Math.Max(1, bounds.Width - countWidth - 8), bounds.Height);
 				TextRenderer.DrawText(eventArgs.Graphics, group.Name, Font, textBounds, foreground, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-				TextRenderer.DrawText(eventArgs.Graphics, group.Count.ToString(), Font, countBounds, palette.Muted, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+				TextRenderer.DrawText(eventArgs.Graphics, countText, Font, countBounds, palette.Muted, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 			}
 			else
 			{

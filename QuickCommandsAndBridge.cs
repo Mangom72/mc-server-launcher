@@ -61,6 +61,7 @@ internal static partial class Launcher
 		public string Syntax;
 		public string Description;
 		public string Source;
+		public string Plugin;
 		public bool Dangerous;
 		public int ReplaceStart;
 		public int ReplaceLength;
@@ -423,6 +424,32 @@ internal static partial class Launcher
 		AddBuiltIn(commands, "info", "플러그인 목록", "Plugin list", "설치된 플러그인을 표시합니다.", "List installed plugins.", "plugins", false, new string[] { "paper", "purpur" });
 		AddBuiltIn(commands, "info", "데이터팩 목록", "Datapack list", "활성 데이터팩을 표시합니다.", "List datapacks.", "datapack list", false, null);
 		return commands;
+	}
+
+	private static List<QuickCommandDefinition> BuildBridgeQuickCommandDefinitions(IEnumerable<QuickCommandSuggestion> suggestions)
+	{
+		List<QuickCommandDefinition> result = new List<QuickCommandDefinition>();
+		HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		if (suggestions == null) return result;
+		foreach (QuickCommandSuggestion suggestion in suggestions)
+		{
+			if (suggestion == null || string.IsNullOrWhiteSpace(suggestion.Plugin)) continue;
+			string plugin = suggestion.Plugin.Trim();
+			string command = NormalizeCommandForSend(suggestion.Value).Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+			if (plugin.Length == 0 || command.Length == 0 || !seen.Add(plugin + "\n" + command)) continue;
+			QuickCommandDefinition definition = new QuickCommandDefinition();
+			definition.Id = "bridge-" + result.Count.ToString(CultureInfo.InvariantCulture);
+			definition.Name = command;
+			definition.Description = string.IsNullOrWhiteSpace(suggestion.Description) ? LauncherUiText("플러그인 명령", "Plugin command") : suggestion.Description;
+			definition.Category = "plugin:" + plugin;
+			definition.Template = command;
+			definition.Parameters = new string[0];
+			definition.Confirm = suggestion.Dangerous;
+			definition.ServerTypes = new string[0];
+			definition.Source = "bridge";
+			result.Add(definition);
+		}
+		return result;
 	}
 
 	private static void AddBuiltIn(List<QuickCommandDefinition> list, string category, string koreanName, string englishName, string koreanDescription, string englishDescription, string template, bool confirm, string[] serverTypes)
@@ -948,7 +975,17 @@ internal static partial class Launcher
 	private static List<QuickCommandSuggestion> ParseBridgeCommands(Dictionary<string, object> message)
 	{
 		List<QuickCommandSuggestion> result = new List<QuickCommandSuggestion>(); object[] commands = message.ContainsKey("commands") ? message["commands"] as object[] : null; if (commands == null) return result;
-		for (int i = 0; i < commands.Length && result.Count < 1000; i++) { Dictionary<string, object> command = commands[i] as Dictionary<string, object>; if (command == null) continue; string name = BridgeString(command, "name"); if (string.IsNullOrWhiteSpace(name)) continue; result.Add(NewSuggestion(name, BridgeString(command, "usage"), BridgeString(command, "description"), "bridge", IsAdvancedDangerousCommand(name))); }
+		for (int i = 0; i < commands.Length && result.Count < 1000; i++)
+		{
+			Dictionary<string, object> command = commands[i] as Dictionary<string, object>;
+			if (command == null) continue;
+			string name = new string(BridgeString(command, "name").Where(delegate(char value) { return !char.IsControl(value); }).Take(128).ToArray()).Trim();
+			if (string.IsNullOrWhiteSpace(name)) continue;
+			QuickCommandSuggestion suggestion = NewSuggestion(name, BridgeString(command, "usage"), BridgeString(command, "description"), "bridge", IsAdvancedDangerousCommand(name));
+			string plugin = new string(BridgeString(command, "plugin").Where(delegate(char value) { return !char.IsControl(value); }).Take(80).ToArray()).Trim();
+			suggestion.Plugin = plugin;
+			result.Add(suggestion);
+		}
 		return result;
 	}
 }

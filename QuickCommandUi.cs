@@ -425,6 +425,8 @@ internal static partial class Launcher
 			ReloadQuickCommandContext();
 			List<QuickCommandDefinition> definitions = GetBuiltInQuickCommands();
 			definitions.AddRange(quickCommandUsers);
+			CommandBridgeSession bridge = GetActiveCommandBridge();
+			if (bridge != null && bridge.Connected) definitions.AddRange(BuildBridgeQuickCommandDefinitions(bridge.Commands));
 			using (QuickCommandPickerForm picker = new QuickCommandPickerForm(definitions, quickCommandServerType))
 			{
 				if (picker.ShowDialog(this) == DialogResult.OK && picker.SelectedCommand != null)
