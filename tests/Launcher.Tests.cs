@@ -37,9 +37,11 @@ internal static class LauncherTests
 			TestSetupLayoutAndValidation();
 			TestUxAccessibility();
 			TestPlayerButtonLifecycle();
+			TestModelessToolWindows();
 			TestJavaSelection();
 			TestConsoleClassificationAndLaunchArguments();
 			TestBackupRestoreAndProfileCopy(temporary);
+			TestManagedServerPortAndNetworkStatus(temporary);
 			TestServerTrashLifecycle(temporary);
 			TestUpnpOwnershipRules();
 			TestModrinthHash(temporary);
@@ -437,6 +439,39 @@ internal static class LauncherTests
 		Pass();
 	}
 
+	private static void TestModelessToolWindows()
+	{
+		Type formType = launcher.GetNestedType("LauncherForm", BindingFlags.NonPublic);
+		using (Form owner = (Form)Activator.CreateInstance(formType, true))
+		{
+			MethodInfo showTool = formType.GetMethod("ShowModelessToolWindow", BindingFlags.Instance | BindingFlags.NonPublic);
+			MethodInfo ensureSafe = formType.GetMethod("EnsureNoBlockingToolWindow", BindingFlags.Instance | BindingFlags.NonPublic);
+			int created = 0;
+			int closed = 0;
+			Form child = null;
+			Func<Form> factory = delegate
+			{
+				created++;
+				child = new Form();
+				child.Text = "모델리스 테스트";
+				return child;
+			};
+			Action onClosed = delegate { closed++; };
+			showTool.Invoke(owner, new object[] { "test-tool", factory, true, onClosed });
+			Equal(true, owner.Enabled, "기능 창을 연 뒤 메인 창 활성 상태 유지");
+			Equal(true, child.Visible, "기능 창 모델리스 표시");
+			Equal(1, created, "기능 창 최초 생성");
+			showTool.Invoke(owner, new object[] { "test-tool", factory, true, onClosed });
+			Equal(1, created, "같은 기능 창 중복 생성 방지");
+			Equal(false, ensureSafe.Invoke(owner, null), "관리 창이 열린 동안 서버 변경 차단");
+			child.Close();
+			Application.DoEvents();
+			Equal(1, closed, "기능 창 종료 후 콜백 실행");
+			Equal(true, ensureSafe.Invoke(owner, null), "기능 창 종료 후 서버 변경 허용");
+		}
+		Pass();
+	}
+
 	private static double ContrastRatio(Color first, Color second)
 	{
 		double lighter = Math.Max(RelativeLuminance(first), RelativeLuminance(second));
@@ -495,6 +530,33 @@ internal static class LauncherTests
 		string clone = Path.Combine(root, "backup-profile-clone");
 		Invoke("CopyProfileDirectory", new object[] { profile, clone });
 		Equal(true, File.Exists(Path.Combine(clone, "world", "level.dat")), "프로필 복제");
+		Pass();
+	}
+
+	private static void TestManagedServerPortAndNetworkStatus(string root)
+	{
+		string profileDirectory = Path.Combine(root, "managed-port-profile");
+		Directory.CreateDirectory(profileDirectory);
+		File.WriteAllText(Path.Combine(profileDirectory, "server.properties"), "server-port=25565\r\n", new UTF8Encoding(false));
+		Type profileType = launcher.GetNestedType("ManagedProfileRecord", BindingFlags.NonPublic);
+		object profile = Activator.CreateInstance(profileType, true);
+		SetPublic(profile, "Name", "포트 테스트");
+		SetPublic(profile, "Directory", profileDirectory);
+		SetPublic(profile, "Port", 25565);
+		Type dashboardType = launcher.GetNestedType("MultiServerDashboardForm", BindingFlags.NonPublic);
+		MethodInfo updatePort = dashboardType.GetMethod("UpdateManagedProfilePort", BindingFlags.Static | BindingFlags.NonPublic);
+		updatePort.Invoke(null, new object[] { profile, 25566 });
+		Equal(25566, GetField(profile, "Port"), "멀티 서버 자동 포트 변경 상태");
+		Equal(25566, Convert.ToInt32(Invoke("ReadConfiguredServerPort", new object[] { Path.Combine(profileDirectory, "server.properties"), 25565 })), "멀티 서버 자동 포트 변경 저장");
+
+		Type sessionType = launcher.GetNestedType("ManagedServerSession", BindingFlags.NonPublic);
+		object session = Activator.CreateInstance(sessionType, true);
+		SetPublic(session, "Profile", profile);
+		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] 외부 접속 실패" });
+		Equal("접속 불가", Convert.ToString(GetField(session, "Status")), "포트포워딩 실패 상태");
+		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] UPnP 매핑 성공 · 203.0.113.10:25566" });
+		Equal("온라인", Convert.ToString(GetField(session, "Status")), "외부 접속 복구 상태");
+		Equal("203.0.113.10:25566", Convert.ToString(GetField(session, "Address")), "외부 접속 주소 갱신");
 		Pass();
 	}
 

@@ -1205,6 +1205,8 @@ internal static partial class Launcher
 		private readonly CheckBox consoleWrapBox;
 		private readonly List<string> consoleHistory = new List<string>();
 		private readonly Dictionary<Control, string> localizedControls = new Dictionary<Control, string>();
+		private readonly Dictionary<string, Form> modelessToolWindows = new Dictionary<string, Form>(StringComparer.Ordinal);
+		private readonly HashSet<string> modelessToolsBlockingServerChanges = new HashSet<string>(StringComparer.Ordinal);
 		private readonly ConcurrentQueue<string> consoleQueue = new ConcurrentQueue<string>();
 		private readonly System.Windows.Forms.Timer consoleTimer;
 		private int queuedConsoleLines;
@@ -1937,6 +1939,7 @@ internal static partial class Launcher
 			{
 				return;
 			}
+			if (!EnsureNoBlockingToolWindow()) return;
 			workflowRunning = true;
 			SetStatusKey("Status.Preparing", false);
 			startButton.Enabled = false;
@@ -2088,6 +2091,7 @@ internal static partial class Launcher
 
 		private void OpenSettings()
 		{
+			if (!EnsureNoBlockingToolWindow()) return;
 			if (workflowRunning || serverRunning)
 			{
 				ShowNoticeKey("Notice.StopBeforeSettings", true);
@@ -2138,6 +2142,59 @@ internal static partial class Launcher
 			}
 		}
 
+		private void ShowModelessToolWindow(string key, Func<Form> factory, bool blocksServerChanges, Action onClosed)
+		{
+			Form existing;
+			if (modelessToolWindows.TryGetValue(key, out existing) && existing != null && !existing.IsDisposed)
+			{
+				if (existing.WindowState == FormWindowState.Minimized) existing.WindowState = FormWindowState.Normal;
+				existing.Show();
+				existing.BringToFront();
+				existing.Activate();
+				return;
+			}
+			if (blocksServerChanges && modelessToolsBlockingServerChanges.Count > 0)
+			{
+				ShowNotice(Localization.CurrentLanguage == Localization.Korean ? "다른 서버 관리 창을 먼저 닫아 주세요." : "Close the other server management window first.", true);
+				ActivateFirstBlockingToolWindow();
+				return;
+			}
+			Form form = factory();
+			if (form == null) throw new InvalidOperationException("기능 창을 만들지 못했습니다.");
+			modelessToolWindows[key] = form;
+			if (blocksServerChanges) modelessToolsBlockingServerChanges.Add(key);
+			form.FormClosed += delegate
+			{
+				Form tracked;
+				if (modelessToolWindows.TryGetValue(key, out tracked) && object.ReferenceEquals(tracked, form)) modelessToolWindows.Remove(key);
+				modelessToolsBlockingServerChanges.Remove(key);
+				if (!IsDisposed && !Disposing && onClosed != null) RunUiAction(onClosed);
+			};
+			form.Show(this);
+			form.BringToFront();
+		}
+
+		private bool EnsureNoBlockingToolWindow()
+		{
+			if (modelessToolsBlockingServerChanges.Count == 0) return true;
+			ShowNotice(Localization.CurrentLanguage == Localization.Korean ? "열려 있는 서버 관리 창을 닫은 뒤 진행해 주세요." : "Close the open server management window before continuing.", true);
+			ActivateFirstBlockingToolWindow();
+			return false;
+		}
+
+		private void ActivateFirstBlockingToolWindow()
+		{
+			foreach (string key in modelessToolsBlockingServerChanges)
+			{
+				Form form;
+				if (!modelessToolWindows.TryGetValue(key, out form) || form == null || form.IsDisposed) continue;
+				if (form.WindowState == FormWindowState.Minimized) form.WindowState = FormWindowState.Normal;
+				form.BringToFront();
+				form.Activate();
+				break;
+			}
+		}
+
 		private bool RequireStoppedServer()
 		{
 			if (!workflowRunning && !serverRunning)
@@ -2152,14 +2209,13 @@ internal static partial class Launcher
 		{
 			string serversRoot = GetServersRootDirectory(AppDomain.CurrentDomain.BaseDirectory);
 			Directory.CreateDirectory(serversRoot);
-			using (MultiServerDashboardForm dialog = new MultiServerDashboardForm(serversRoot, workflowRunning || serverRunning))
+			ShowModelessToolWindow("server-management", delegate { return new MultiServerDashboardForm(serversRoot, workflowRunning || serverRunning); }, true, delegate
 			{
-				dialog.ShowDialog(this);
-			}
-			string activeProfile = ReadActiveProfileName(serversRoot);
-			string directory = GetProfileDirectory(serversRoot, activeProfile);
-			int port = ReadConfiguredServerPort(Path.Combine(directory, "server.properties"), 25565);
-			SetConnectionAddress(GetLocalConnectionAddress(port));
+				string activeProfile = ReadActiveProfileName(serversRoot);
+				string directory = GetProfileDirectory(serversRoot, activeProfile);
+				int port = ReadConfiguredServerPort(Path.Combine(directory, "server.properties"), 25565);
+				SetConnectionAddress(GetLocalConnectionAddress(port));
+			});
 		}
 
 		private void OpenBackupManager()
@@ -2171,10 +2227,7 @@ internal static partial class Launcher
 			string root;
 			string directory;
 			ReadActiveLauncherOptions(out root, out directory);
-			using (BackupManagerForm dialog = new BackupManagerForm(directory))
-			{
-				dialog.ShowDialog(this);
-			}
+			ShowModelessToolWindow("backup", delegate { return new BackupManagerForm(directory); }, true, null);
 		}
 
 		private void OpenContentManager()
@@ -2186,10 +2239,7 @@ internal static partial class Launcher
 			string root;
 			string directory;
 			LauncherOptions options = ReadActiveLauncherOptions(out root, out directory);
-			using (ContentManagerForm dialog = new ContentManagerForm(options))
-			{
-				dialog.ShowDialog(this);
-			}
+			ShowModelessToolWindow("content", delegate { return new ContentManagerForm(options); }, true, null);
 		}
 
 		private void OpenPlayerManager()
@@ -2199,10 +2249,7 @@ internal static partial class Launcher
 				ShowNoticeKey("Notice.NoServer", true);
 				return;
 			}
-			using (PlayerManagementForm dialog = new PlayerManagementForm(SendServerCommand))
-			{
-				dialog.ShowDialog(this);
-			}
+			ShowModelessToolWindow("players", delegate { return new PlayerManagementForm(SendServerCommand); }, false, null);
 		}
 
 		private void OpenNetworkTools()
@@ -2226,10 +2273,7 @@ internal static partial class Launcher
 				thread.Name = "외부 접속 다시 확인";
 				thread.Start();
 			};
-			using (NetworkToolsForm dialog = new NetworkToolsForm(directory, port, currentSelectedJavaPath, recheck))
-			{
-				dialog.ShowDialog(this);
-			}
+			ShowModelessToolWindow("network", delegate { return new NetworkToolsForm(directory, port, currentSelectedJavaPath, recheck); }, false, null);
 		}
 
 		private void CreateDiagnostics()
@@ -2251,6 +2295,7 @@ internal static partial class Launcher
 
 		private void UpgradeServerFiles()
 		{
+			if (!EnsureNoBlockingToolWindow()) return;
 			if (workflowRunning || serverRunning)
 			{
 				ShowNoticeKey("Notice.StopBeforeUpgrade", true);

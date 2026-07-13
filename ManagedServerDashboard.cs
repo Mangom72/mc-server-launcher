@@ -79,6 +79,7 @@ internal static partial class Launcher
 		private readonly Button trashButton;
 		private readonly CheckBox restartBox;
 		private readonly Label summaryLabel;
+		private readonly ToolTip serverListToolTip;
 		private readonly Dictionary<string, ManagedServerSession> sessions = new Dictionary<string, ManagedServerSession>(StringComparer.OrdinalIgnoreCase);
 		private readonly List<ManagedProfileRecord> profiles = new List<ManagedProfileRecord>();
 		private readonly System.Windows.Forms.Timer refreshTimer;
@@ -143,10 +144,18 @@ internal static partial class Launcher
 			serverList.Columns.Add(korean ? "포트" : "Port", 70);
 			serverList.Columns.Add(korean ? "메모리" : "Memory", 72);
 			serverList.Columns.Add(korean ? "접속자" : "Players", 70);
-			serverList.Columns.Add(korean ? "주소" : "Address", 300);
+			serverList.Columns.Add(korean ? "주소" : "Address", 258);
+			ColumnHeader copyAddressColumn = serverList.Columns.Add(string.Empty, 42);
+			copyAddressColumn.TextAlign = HorizontalAlignment.Center;
 			serverList.SelectedIndexChanged += delegate { UpdateActions(); };
-			serverList.DoubleClick += delegate { OpenSelectedConsole(); };
+			serverList.MouseClick += HandleServerListMouseClick;
+			serverList.MouseDoubleClick += HandleServerListMouseDoubleClick;
+			serverList.MouseMove += HandleServerListMouseMove;
+			serverList.MouseLeave += delegate { serverList.Cursor = Cursors.Default; };
+			serverList.Resize += delegate { ResizeServerListColumns(); };
 			root.Controls.Add(serverList, 0, 1);
+			serverListToolTip = new ToolTip();
+			serverListToolTip.SetToolTip(serverList, korean ? "주소 오른쪽의 복사 기호를 누르면 접속 주소가 복사됩니다." : "Select the copy symbol beside an address to copy it.");
 
 			summaryLabel = new Label();
 			summaryLabel.Dock = DockStyle.Fill;
@@ -344,7 +353,7 @@ internal static partial class Launcher
 						item.Tag = profile.Name;
 						serverList.Items.Insert(i, item);
 					}
-					while (item.SubItems.Count < 8) item.SubItems.Add(string.Empty);
+					while (item.SubItems.Count < 9) item.SubItems.Add(string.Empty);
 					item.Text = displayName;
 					item.SubItems[1].Text = status;
 					item.SubItems[2].Text = GetServerTypeDisplayName(profile.ServerType);
@@ -353,6 +362,7 @@ internal static partial class Launcher
 					item.SubItems[5].Text = profile.MemoryGb.ToString(CultureInfo.InvariantCulture) + " GB";
 					item.SubItems[6].Text = players.ToString(CultureInfo.InvariantCulture);
 					item.SubItems[7].Text = address;
+					item.SubItems[8].Text = "⧉";
 				}
 			}
 			finally
@@ -613,7 +623,31 @@ internal static partial class Launcher
 				ShowManagedMessage("이 프로필은 설정을 먼저 완료해야 합니다.", "Complete this profile's setup first.", true);
 				return;
 			}
-			if (IsPortUsedByManagedSession(profile.Port, profile.Name) || IsLocalTcpPortListening(profile.Port))
+			if (IsPortUsedByManagedSession(profile.Port, profile.Name))
+			{
+				if (automaticRestart)
+				{
+					existing.Status = ManagedText("포트 충돌", "Port conflict");
+					existing.AddLine("[Launcher] " + ManagedText("자동 재시작을 중단했습니다. 같은 포트를 다른 서버가 사용 중입니다.", "Automatic restart stopped because another server is using the same port."));
+					RenderProfiles();
+					return;
+				}
+				int previousPort = profile.Port;
+				int availablePort = FindAvailableServerPort(serversRoot, previousPort + 1, profile.Name);
+				DialogResult changePort = MessageBox.Show(this,
+					ManagedText(
+						"포트 " + previousPort + "을(를) 실행 중인 다른 서버가 사용하고 있습니다. 이 서버의 포트를 " + availablePort + "(으)로 자동 변경하고 실행할까요?",
+						"Another running server is using port " + previousPort + ". Change this server to port " + availablePort + " and start it?"),
+					Text,
+					MessageBoxButtons.YesNo,
+					MessageBoxIcon.Question);
+				if (changePort != DialogResult.Yes)
+				{
+					return;
+				}
+				UpdateManagedProfilePort(profile, availablePort);
+			}
+			if (IsLocalTcpPortListening(profile.Port))
 			{
 				ShowManagedMessage("포트 " + profile.Port + "을(를) 다른 프로그램이나 서버가 사용 중입니다.", "Port " + profile.Port + " is already in use.", true);
 				return;
@@ -888,6 +922,75 @@ internal static partial class Launcher
 			return false;
 		}
 
+		private static void UpdateManagedProfilePort(ManagedProfileRecord profile, int port)
+		{
+			if (profile == null) throw new ArgumentNullException("profile");
+			if (port < 1 || port > 65535) throw new ArgumentOutOfRangeException("port");
+			SetSimplePropertyValue(Path.Combine(profile.Directory, "server.properties"), "server-port", port.ToString(CultureInfo.InvariantCulture));
+			profile.Port = port;
+		}
+
+		private void HandleServerListMouseClick(object sender, MouseEventArgs eventArgs)
+		{
+			if (eventArgs.Button != MouseButtons.Left || !IsAddressCopyCell(eventArgs.Location))
+			{
+				return;
+			}
+			ListViewHitTestInfo hit = serverList.HitTest(eventArgs.Location);
+			string address = hit.Item == null || hit.Item.SubItems.Count <= 7 ? string.Empty : hit.Item.SubItems[7].Text;
+			if (string.IsNullOrWhiteSpace(address))
+			{
+				return;
+			}
+			try
+			{
+				Clipboard.SetText(address);
+			}
+			catch (Exception exception)
+			{
+				ShowManagedMessage("주소를 복사하지 못했습니다: " + exception.Message, "Could not copy the address: " + exception.Message, true);
+			}
+		}
+
+		private void HandleServerListMouseDoubleClick(object sender, MouseEventArgs eventArgs)
+		{
+			if (!IsAddressCopyCell(eventArgs.Location))
+			{
+				OpenSelectedConsole();
+			}
+		}
+
+		private void HandleServerListMouseMove(object sender, MouseEventArgs eventArgs)
+		{
+			serverList.Cursor = IsAddressCopyCell(eventArgs.Location) ? Cursors.Hand : Cursors.Default;
+		}
+
+		private void ResizeServerListColumns()
+		{
+			if (serverList.Columns.Count < 9 || serverList.ClientSize.Width <= 0)
+			{
+				return;
+			}
+			int fixedWidth = 0;
+			for (int i = 1; i < serverList.Columns.Count; i++)
+			{
+				if (i != 7)
+				{
+					fixedWidth += serverList.Columns[i].Width;
+				}
+			}
+			int flexibleWidth = Math.Max(270, serverList.ClientSize.Width - fixedWidth - SystemInformation.VerticalScrollBarWidth - 8);
+			int profileWidth = Math.Min(180, Math.Max(130, flexibleWidth / 2));
+			serverList.Columns[0].Width = profileWidth;
+			serverList.Columns[7].Width = Math.Max(140, flexibleWidth - profileWidth);
+		}
+
+		private bool IsAddressCopyCell(Point location)
+		{
+			ListViewHitTestInfo hit = serverList.HitTest(location);
+			return hit.Item != null && hit.SubItem != null && hit.Item.SubItems.IndexOf(hit.SubItem) == 8;
+		}
+
 		private int GetRunningManagedMemory(string exceptProfile)
 		{
 			int total = 0;
@@ -944,7 +1047,8 @@ internal static partial class Launcher
 			ManagedProfileRecord profile = GetSelectedProfile();
 			ManagedServerSession session = GetSelectedSession();
 			bool running = IsManagedSessionRunning(session);
-			bool runningElsewhere = profile != null && !running && IsLocalTcpPortListening(profile.Port);
+			bool managedPortConflict = profile != null && !running && IsPortUsedByManagedSession(profile.Port, profile.Name);
+			bool runningElsewhere = profile != null && !running && !managedPortConflict && IsLocalTcpPortListening(profile.Port);
 			startButton.Enabled = profile != null && !running && !runningElsewhere;
 			stopButton.Enabled = running;
 			consoleButton.Enabled = session != null;
@@ -1221,10 +1325,15 @@ internal static partial class Launcher
 		{
 			session.Status = ManagedText("안전 종료 중", "Stopping safely");
 		}
-		Match success = Regex.Match(line, @"\[외부 접속 확인\]\s*성공:\s*외부에서\s+([^\s]+)에\s+접속", RegexOptions.IgnoreCase);
+		Match success = Regex.Match(line, @"\[외부 접속 확인\]\s*성공:\s*외부에서\s+([^\s]+)에\s+접속|\[외부 접속\]\s*(?:기존 포트포워딩 정상|UPnP 매핑 성공)\s*·\s*([^\s]+)", RegexOptions.IgnoreCase);
 		if (success.Success)
 		{
-			session.Address = success.Groups[1].Value;
+			session.Address = success.Groups[1].Success ? success.Groups[1].Value : success.Groups[2].Value;
+			session.Status = ManagedText("온라인", "Online");
+		}
+		if (IsManagedExternalAccessFailureLine(line))
+		{
+			session.Status = ManagedText("접속 불가", "Unreachable");
 		}
 		Match joined = Regex.Match(line, @"\b([A-Za-z0-9_]{3,16}) joined the game\b", RegexOptions.IgnoreCase);
 		if (joined.Success)
@@ -1236,6 +1345,23 @@ internal static partial class Launcher
 		{
 			session.Players.Remove(left.Groups[1].Value);
 		}
+	}
+
+	private static bool IsManagedExternalAccessFailureLine(string line)
+	{
+		if (string.IsNullOrEmpty(line) || line.IndexOf("[외부 접속]", StringComparison.OrdinalIgnoreCase) < 0)
+		{
+			return false;
+		}
+		string[] failures = { "외부 접속 실패", "UPnP 매핑 실패", "수동 포트포워딩 필요", "CGNAT 가능성 있음", "포트 충돌 발생", "검사 서비스에 연결하지 못해" };
+		for (int i = 0; i < failures.Length; i++)
+		{
+			if (line.IndexOf(failures[i], StringComparison.OrdinalIgnoreCase) >= 0)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static bool IsManagedSessionRunning(ManagedServerSession session)

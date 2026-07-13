@@ -451,9 +451,11 @@ internal static partial class Launcher
 			string root;
 			string directory;
 			LauncherOptions options = ReadActiveLauncherOptions(out root, out directory);
-			using (QuickCommandManagerForm dialog = new QuickCommandManagerForm(root, directory, options)) dialog.ShowDialog(this);
-			ReloadQuickCommandContext();
-			UpdateQuickCommandBridgeStatus();
+			ShowModelessToolWindow("quick-command-manager", delegate { return new QuickCommandManagerForm(root, directory, options); }, true, delegate
+			{
+				ReloadQuickCommandContext();
+				UpdateQuickCommandBridgeStatus();
+			});
 		}
 	}
 
