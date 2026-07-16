@@ -1710,11 +1710,9 @@ internal static partial class Launcher
 			header.Controls.Add(languageButton);
 
 			launcherUpdateButton = CreateButton(Localization.T("Button.LauncherUpdate"), 168);
-
 			launcherUpdateButton.Tag = "ghost";
-
 			launcherUpdateButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-
+			launcherUpdateButton.Top = 4;
 			SetButtonIcon(launcherUpdateButton, ButtonIcon.Upgrade);
 
 			launcherUpdateButton.Click += delegate { CheckLauncherUpdateNow(); };
@@ -5009,20 +5007,14 @@ internal static partial class Launcher
 
 		
 		private void ApplyTheme()
-
 		{
-
 			SendMessage(this.Handle, WM_SETREDRAW, false, 0);
-
 			try
-
 			{
-
 				ThemePalette palette = ThemePalette.Create(darkTheme);
-
 				BackColor = palette.Window;
-
 				ForeColor = palette.Text;
+				TitleBarDwm.ApplyTheme(this, palette.Window, palette.Text, palette.Border);
 
 			ApplyThemeRecursive(this, palette);
 

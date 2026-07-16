@@ -51,7 +51,7 @@ Write-Host "Verifying artifacts..."
 
 # 6. Upload to GitHub Releases
 Write-Host "Publishing to GitHub Releases ($tag)..."
-$title = "MineHarbor ? Minecraft Server Launcher v$($versionJson.productVersion) (build $($versionJson.buildNumber))"
+$title = "MineHarbor - Minecraft Server Launcher v$($versionJson.productVersion) (build $($versionJson.buildNumber))"
 $notes = Join-Path $artifacts 'release-notes.md'
 
 $assetList = @(
