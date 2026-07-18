@@ -2,9 +2,9 @@
 
 ## Codex Security Remediation - 2026-07-18
 
-- **Current Version**: 1.5.19 (build 26.2.45.59)
-- **Branch**: `codex/audit-ui-ux-security-upnp`
-- **Status**: 감사 후 수정·검증 및 원격 브랜치 업로드 완료, 초안 PR 인증 대기
+- **Current Version**: 1.5.20 (build 26.2.45.60)
+- **Branch**: `codex/release-v1.5.20`
+- **Status**: 감사 수정본을 정식 패치 릴리스로 게시하기 위한 버전·변경 기록 및 태그 준비
 - UPnP 매핑을 실행별로 기록하고 현재 내부 IP·포트·프로토콜·설명이 정확히 일치할 때만 삭제합니다. 살아 있는 다른 MineHarbor 프로세스의 기록은 보존합니다.
 - TCP/UDP 부분 성공, 외부 검사 실패, 중복 재검사, CGNAT dual-stack 비교, 가상 어댑터와 방화벽 규칙 판정을 보수적으로 처리합니다.
 - Forge/Inno Setup 다운로드, 백업 복원, 직접 콘솔 위험 명령, 로컬 코드 서명 경로를 강화했습니다.

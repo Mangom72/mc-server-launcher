@@ -5,6 +5,21 @@
 Product versions follow [Semantic Versioning](https://semver.org/), while `26.2.45.xx` is a separate internal build number.
 
 
+## [1.5.20] - 2026-07-18
+
+### Korean
+- **UPnP 소유권 및 복구 강화**: 실행별 매핑 기록, 프로세스 간 보호, 삭제 직전 소유권 재검증을 적용하여 현재 실행이 만든 정확히 일치하는 매핑만 정리하도록 강화했습니다.
+- **외부 접속 진단 안정화**: TCP·UDP 부분 성공, 외부 검사 장애, 중복 재검사, IPv4·IPv6 및 가상·VPN 어댑터 상태를 구분하고 UPnP 정리를 비동기로 전환했습니다.
+- **공급망 및 백업 보안 강화**: Forge Installer와 Inno Setup의 해시·서명을 검증하고 다운로드 리디렉션·크기를 제한했으며, 백업 manifest 밖의 파일과 과도한 압축 해제량을 차단했습니다.
+- **명령 및 빌드 안전성 강화**: 모든 직접 콘솔 경로에 위험 명령 확인을 적용하고 일반 빌드에서 고정 비밀번호 인증서와 사용자 인증서 저장소 변경을 제거했습니다.
+
+### English
+- **Stronger UPnP ownership and recovery**: Added per-run mapping records, cross-process protection, and ownership revalidation immediately before deletion so only exact mappings created by the current run are removed.
+- **More reliable external-access diagnostics**: Distinguished TCP/UDP partial success, checker outages, duplicate rechecks, dual-stack addresses, and virtual or VPN adapters, while moving UPnP cleanup off the UI thread.
+- **Hardened supply chain and backups**: Verified Forge Installer and Inno Setup hashes and signatures, bounded redirects and download sizes, and rejected backup files outside the manifest or beyond extraction limits.
+- **Safer commands and builds**: Applied dangerous-command confirmation to every direct console path and removed fixed-password certificate creation and user certificate-store changes from normal builds.
+
+
 ## [1.5.19] - 2026-07-18
 
 ### Korean
