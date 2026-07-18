@@ -1261,8 +1261,8 @@ internal static partial class Launcher
 
 		private void SendManagedCommand()
 		{
-			string command = commandBox.Text.Trim();
-			if (command.Length == 0 || !IsManagedSessionRunning(session))
+			string command;
+			if (!PrepareDirectServerCommand(this, commandBox.Text, out command) || !IsManagedSessionRunning(session))
 			{
 				return;
 			}

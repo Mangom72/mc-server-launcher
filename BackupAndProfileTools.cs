@@ -940,20 +940,32 @@ internal static partial class Launcher
 
 	private static List<BackupManifestItem> VerifyComprehensiveBackup(string backupPath, string extractedRoot)
 	{
+		const int maximumBackupEntryCount = 100000;
+		const long maximumBackupExpandedBytes = 53687091200L;
 		List<BackupManifestItem> items;
 		using (ZipArchive archive = ZipFile.OpenRead(backupPath))
 		{
+			if (archive.Entries.Count > maximumBackupEntryCount)
+			{
+				throw new InvalidDataException("백업 항목 수가 안전 제한을 초과했습니다.");
+			}
 			items = ReadBackupManifest(archive);
 			Dictionary<string, ZipArchiveEntry> entries = new Dictionary<string, ZipArchiveEntry>(StringComparer.OrdinalIgnoreCase);
+			long expandedBytes = 0L;
 			foreach (ZipArchiveEntry entry in archive.Entries)
 			{
 				if (entry.FullName.StartsWith("profile/", StringComparison.OrdinalIgnoreCase))
 				{
 					string relative = entry.FullName.Substring(8).Replace('\\', '/');
 					ValidateBackupRelativePath(relative);
-					entries[relative] = entry;
+					if (entry.FullName.EndsWith("/", StringComparison.Ordinal)) continue;
+					if (entries.ContainsKey(relative)) throw new InvalidDataException("백업에 중복 파일 경로가 있습니다: " + relative);
+					expandedBytes = checked(expandedBytes + entry.Length);
+					if (expandedBytes > maximumBackupExpandedBytes) throw new InvalidDataException("백업의 총 해제 크기가 안전 제한을 초과했습니다.");
+					entries.Add(relative, entry);
 				}
 			}
+			if (entries.Count != items.Count) throw new InvalidDataException("백업 파일 목록이 manifest와 정확히 일치하지 않습니다.");
 			for (int i = 0; i < items.Count; i++)
 			{
 				ZipArchiveEntry entry;
@@ -1112,13 +1124,24 @@ internal static partial class Launcher
 	{
 		using (ZipArchive archive = ZipFile.OpenRead(backupPath))
 		{
-			foreach (ZipArchiveEntry entry in archive.Entries)
+			List<BackupManifestItem> items = ReadBackupManifest(archive);
+			Dictionary<string, ZipArchiveEntry> entries = new Dictionary<string, ZipArchiveEntry>(StringComparer.OrdinalIgnoreCase);
+			foreach (ZipArchiveEntry candidate in archive.Entries)
 			{
-				if (!entry.FullName.StartsWith("profile/", StringComparison.OrdinalIgnoreCase) || entry.FullName.EndsWith("/", StringComparison.Ordinal))
+				if (!candidate.FullName.StartsWith("profile/", StringComparison.OrdinalIgnoreCase) || candidate.FullName.EndsWith("/", StringComparison.Ordinal))
 				{
 					continue;
 				}
-				string relative = entry.FullName.Substring(8).Replace('/', Path.DirectorySeparatorChar);
+				string key = candidate.FullName.Substring(8).Replace('\\', '/');
+				ValidateBackupRelativePath(key);
+				if (entries.ContainsKey(key)) throw new InvalidDataException("백업에 중복 파일 경로가 있습니다: " + key);
+				entries.Add(key, candidate);
+			}
+			for (int i = 0; i < items.Count; i++)
+			{
+				ZipArchiveEntry entry;
+				if (!entries.TryGetValue(items[i].RelativePath, out entry)) throw new InvalidDataException("manifest 파일을 백업에서 찾지 못했습니다: " + items[i].RelativePath);
+				string relative = items[i].RelativePath.Replace('/', Path.DirectorySeparatorChar);
 				string destination = GetSafeBackupDestination(staging, relative);
 				Directory.CreateDirectory(Path.GetDirectoryName(destination));
 				using (Stream input = entry.Open())

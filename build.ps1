@@ -1,10 +1,12 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$OutputDirectory = (Join-Path $PSScriptRoot 'artifacts'),
     [switch]$BuildInstaller,
     [switch]$SkipDependencyDownload,
     [switch]$SkipCompile,
-    [string]$InnoCompiler
+    [string]$InnoCompiler,
+    [string]$SigningCertificatePath,
+    [string]$SigningCertificatePassword
 )
 
 $ErrorActionPreference = 'Stop'
@@ -77,8 +79,9 @@ elseif (!(Test-Path -LiteralPath $portableExe)) {
     throw "Portable EXE does not exist for -SkipCompile: $portableExe"
 }
 
-# Authenticode 署名
-& (Join-Path $projectRoot 'scripts\sign-build.ps1') -ExePath $portableExe
+if (![string]::IsNullOrWhiteSpace($SigningCertificatePath)) {
+    & (Join-Path $projectRoot 'scripts\sign-build.ps1') -ExePath $portableExe -CertificatePath $SigningCertificatePath -CertificatePassword $SigningCertificatePassword
+}
 # 기존 런처가 새 브랜드 버전을 자동 업데이트할 수 있도록 같은 바이너리의 예전 자산 이름을 함께 제공합니다.
 Copy-Item -LiteralPath $portableExe -Destination $legacyPortableExe -Force
 

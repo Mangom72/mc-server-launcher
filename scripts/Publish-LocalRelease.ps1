@@ -6,6 +6,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $artifacts = Join-Path $projectRoot 'artifacts'
+$innoUrl = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe'
+$innoSha256 = '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732'
 
 # 1. Check gh CLI
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
@@ -20,13 +22,18 @@ if (-not $SkipInstaller) {
     
     if (-not (Test-Path $innoCompiler)) {
         Write-Host "Downloading Inno Setup..."
-        $innoUrl = "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe"
         $installer = Join-Path $projectRoot '.build\innosetup-installer.exe'
         New-Item -ItemType Directory -Force -Path (Join-Path $projectRoot '.build') | Out-Null
         Invoke-WebRequest $innoUrl -OutFile $installer
+        $actualHash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+        if (!$actualHash.Equals($innoSha256, [StringComparison]::OrdinalIgnoreCase)) { throw 'Inno Setup hash verification failed.' }
+        if ((Get-AuthenticodeSignature -LiteralPath $installer).Status -ne 'Valid') { throw 'Inno Setup signature verification failed.' }
         Write-Host "Installing Inno Setup locally to $innoDir ..."
         $process = Start-Process $installer -Wait -PassThru -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',("/DIR=`"$innoDir`"")
         if ($process.ExitCode -ne 0) { throw "Inno Setup install failed: $($process.ExitCode)" }
+    }
+    if ((Get-AuthenticodeSignature -LiteralPath $innoCompiler).Status -ne 'Valid') {
+        throw 'Inno Setup compiler signature verification failed.'
     }
 }
 

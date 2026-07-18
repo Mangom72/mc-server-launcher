@@ -2,6 +2,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -39,11 +40,24 @@ internal static partial class Launcher
 		public string RouterExternalIp;
 		public bool PortConflict;
 		public bool ExistingMatchingMapping;
+		public bool UdpRequired;
+		public bool UdpMapped;
 		public string Error;
+	}
+
+	internal sealed class UpnpCleanupResult
+	{
+		public int ClearedCount;
+		public string Error;
+		public bool TimedOut;
 	}
 
 	private static NetworkToolsForm activeManualNetworkForm;
 	private static string lastUpnpCleanupStatus;
+	private static int externalRecheckRunning;
+	private static readonly object activeUpnpOwnershipLock = new object();
+	private static readonly HashSet<string> activeUpnpOwnershipKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+	private static readonly Mutex upnpTrackerMutex = new Mutex(false, "Local\\MineHarbor-UpnpTracker-v1");
 	private const int UpnpDiscoveryAttemptCount = 3;
 	private const int UpnpMappingAttemptCount = 3;
 	private const int UpnpMappingVerificationCount = 3;
@@ -129,9 +143,13 @@ internal static partial class Launcher
 				return;
 			}
 
-			if (attempt.Created.Count > 0)
+			if (attempt.Created.Count > 0 && (!attempt.UdpRequired || attempt.UdpMapped))
 			{
 				ReportExternalAccessStatus("UPnP 매핑 성공", false);
+			}
+			else if (attempt.Created.Count > 0)
+			{
+				ReportExternalAccessStatus("UPnP TCP 매핑만 성공", true);
 			}
 			else if (attempt.ExistingMatchingMapping)
 			{
@@ -153,7 +171,8 @@ internal static partial class Launcher
 				string address = FormatExternalAddress(recheck.PublicIp, serverPort);
 				SetLauncherConnectionAddress(address);
 				Console.WriteLine("[외부 접속] UPnP 처리 후 외부 접속 성공: " + address);
-				ReportExternalAccessStatus(attempt.Created.Count > 0 ? "UPnP 매핑 성공 · " + address : "기존 포트포워딩 정상 · " + address, false);
+				bool completeMapping = attempt.Created.Count > 0 && (!attempt.UdpRequired || attempt.UdpMapped);
+				ReportExternalAccessStatus(completeMapping ? "UPnP 매핑 성공 · " + address : attempt.Created.Count > 0 ? "UPnP TCP 매핑만 성공 · " + address : "기존 포트포워딩 정상 · " + address, !completeMapping && attempt.Created.Count > 0);
 			}
 			else
 			{
@@ -186,21 +205,34 @@ internal static partial class Launcher
 
 	private static void RecheckExternalReachabilityOnly(int serverPort)
 	{
-		ReportExternalAccessStatus("기존 포트포워딩 검사 중", false);
-		using (ManualResetEvent notStopped = new ManualResetEvent(false))
+		if (Interlocked.CompareExchange(ref externalRecheckRunning, 1, 0) != 0)
 		{
-			ExternalPortCheckResult result = CheckExternalPort(serverPort, notStopped, 1);
-			if (result.Reachable)
+			ReportExternalAccessStatus("외부 접속 재검사 진행 중", false);
+			return;
+		}
+		ReportExternalAccessStatus("기존 포트포워딩 검사 중", false);
+		try
+		{
+			using (ManualResetEvent notStopped = new ManualResetEvent(false))
 			{
-				string address = FormatExternalAddress(result.PublicIp, serverPort);
-				SetLauncherConnectionAddress(address);
-				ReportExternalAccessStatus("기존 포트포워딩 정상 · " + address, false);
-			}
-			else
-			{
-				ReportExternalAccessStatus("외부 접속 실패", true);
+				ExternalPortCheckResult result = CheckExternalPort(serverPort, notStopped, 1);
+				if (result.Reachable)
+				{
+					string address = FormatExternalAddress(result.PublicIp, serverPort);
+					SetLauncherConnectionAddress(address);
+					ReportExternalAccessStatus("기존 포트포워딩 정상 · " + address, false);
+				}
+				else if (!result.CheckCompleted)
+				{
+					ReportExternalAccessStatus("외부 접속 확인 불가", true);
+				}
+				else
+				{
+					ReportExternalAccessStatus("외부 접속 실패", true);
+				}
 			}
 		}
+		finally { Interlocked.Exchange(ref externalRecheckRunning, 0); }
 	}
 
 	private static bool WaitForLocalServerPort(int port, WaitHandle stopped, TimeSpan timeout)
@@ -312,9 +344,12 @@ internal static partial class Launcher
 			{
 				return result;
 			}
+			int recovered = CleanupTrackedComMappings(result.Collection);
+			if (recovered > 0) Console.WriteLine("[UPnP] 이전 실행에서 남은 매핑 " + recovered.ToString(CultureInfo.InvariantCulture) + "개를 안전하게 정리했습니다.");
 			ReportExternalAccessStatus("UPnP 자동 매핑 중", false);
 			string token = Guid.NewGuid().ToString("N").Substring(0, 12);
-			string description = "MineHarbor " + token;
+			string description = "MH-" + token;
+			result.UdpRequired = udpNeeded;
 			if (!TryAddSingleUpnpMapping(result, serverPort, serverPort, "TCP", network.LocalIpv4, description, stopped))
 			{
 				return result;
@@ -328,8 +363,10 @@ internal static partial class Launcher
 						ReportExternalAccessStatus("포트 충돌 발생", true);
 						result.PortConflict = false;
 					}
-					Console.WriteLine("[UPnP] UDP 매핑을 만들지 못했습니다. TCP 외부 접속은 계속 검사합니다.");
+					result.Error = "UDP 매핑을 만들지 못했습니다. 쿼리 기능은 외부에서 동작하지 않을 수 있습니다. " + (result.Error ?? string.Empty);
+					Console.WriteLine("[UPnP] " + result.Error);
 				}
+				else result.UdpMapped = true;
 			}
 		}
 		catch (Exception exception)
@@ -413,6 +450,8 @@ internal static partial class Launcher
 			object created = null;
 			try
 			{
+				// Add 응답 전에 프로세스가 종료되어도 같은 토큰의 매핑만 복구할 수 있도록 의도를 먼저 기록합니다.
+				PersistTrackedUpnpMapping(externalPort, internalPort, protocol, internalClient, description);
 				created = InvokeComMethod(attempt.Collection, "Add", externalPort, protocol, internalPort, internalClient, true, description);
 				if (created != null && MappingTargetsEndpoint(created, internalPort, internalClient))
 				{
@@ -445,10 +484,12 @@ internal static partial class Launcher
 				if (stopped.WaitOne(addAttempt * 750))
 				{
 					attempt.Error = "서버가 종료되어 UPnP 매핑을 중단했습니다.";
+					MarkTrackedOwnershipInactive(description, protocol);
 					return false;
 				}
 			}
 		}
+		MarkTrackedOwnershipInactive(description, protocol);
 		return false;
 	}
 
@@ -518,6 +559,42 @@ internal static partial class Launcher
 		record.InternalClient = internalClient;
 		record.Description = description;
 		attempt.Created.Add(record);
+		PersistTrackedUpnpMapping(externalPort, internalPort, protocol, internalClient, description);
+	}
+
+	private static void PersistTrackedUpnpMapping(int externalPort, int internalPort, string protocol, string internalClient, string description)
+	{
+		EnterUpnpTrackerLock();
+		try
+		{
+			List<UpnpMappedPort> tracked = UpnpMappingOwnershipTracker.LoadMappings();
+			UpnpMappedPort persisted = new UpnpMappedPort();
+			persisted.ExternalPort = externalPort;
+			Process ownerProcess = Process.GetCurrentProcess();
+			persisted.ProfileId = ownerProcess.Id.ToString(CultureInfo.InvariantCulture) + ":" + ownerProcess.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture);
+			persisted.InternalPort = internalPort;
+			persisted.InternalIp = internalClient;
+			persisted.Protocol = protocol.ToUpperInvariant();
+			persisted.Description = description;
+			persisted.CreatedAt = DateTime.UtcNow;
+			for (int i = 0; i < tracked.Count; i++)
+			{
+				UpnpMappedPort item = tracked[i];
+				if (item.ExternalPort == externalPort && string.Equals(item.Protocol, protocol, StringComparison.OrdinalIgnoreCase) && IsTrackedOwnerAlive(item) && !string.Equals(item.Description, description, StringComparison.Ordinal))
+				{
+					throw new InvalidOperationException("다른 MineHarbor 실행이 같은 UPnP 포트의 소유권을 기록하고 있습니다.");
+				}
+			}
+			tracked.RemoveAll(delegate(UpnpMappedPort item)
+			{
+				bool samePort = item.ExternalPort == externalPort && string.Equals(item.Protocol, protocol, StringComparison.OrdinalIgnoreCase);
+				return samePort && (!IsTrackedOwnerAlive(item) || string.Equals(item.Description, description, StringComparison.Ordinal));
+			});
+			tracked.Add(persisted);
+			UpnpMappingOwnershipTracker.SaveMappings(tracked);
+			lock (activeUpnpOwnershipLock) activeUpnpOwnershipKeys.Add(GetUpnpOwnershipKey(description, protocol));
+		}
+		finally { upnpTrackerMutex.ReleaseMutex(); }
 	}
 
 	private static bool VerifyUpnpMappingVisibility(UpnpMappingAttempt attempt, int externalPort, int internalPort, string protocol, string internalClient, WaitHandle stopped)
@@ -568,33 +645,28 @@ internal static partial class Launcher
 			return null;
 		}
 		int inspected = 0;
-		foreach (object mapping in enumerable)
+		IEnumerator enumerator = null;
+		try
 		{
-			if (mapping == null)
+			enumerator = enumerable.GetEnumerator();
+			while (enumerator.MoveNext())
 			{
-				continue;
-			}
-			bool match = false;
-			try
-			{
-				int port = Convert.ToInt32(GetComProperty(mapping, "ExternalPort"), CultureInfo.InvariantCulture);
-				string currentProtocol = Convert.ToString(GetComProperty(mapping, "Protocol"), CultureInfo.InvariantCulture);
-				match = port == externalPort && string.Equals(currentProtocol, protocol, StringComparison.OrdinalIgnoreCase);
-			}
-			catch
-			{
-			}
-			if (match)
-			{
-				return mapping;
-			}
-			ReleaseComObject(mapping);
-			inspected++;
-			if (inspected >= 4096)
-			{
-				break;
+				object mapping = enumerator.Current;
+				if (mapping == null) continue;
+				bool match = false;
+				try
+				{
+					int port = Convert.ToInt32(GetComProperty(mapping, "ExternalPort"), CultureInfo.InvariantCulture);
+					string currentProtocol = Convert.ToString(GetComProperty(mapping, "Protocol"), CultureInfo.InvariantCulture);
+					match = port == externalPort && string.Equals(currentProtocol, protocol, StringComparison.OrdinalIgnoreCase);
+				}
+				catch { }
+				if (match) return mapping;
+				ReleaseComObject(mapping);
+				if (++inspected >= 4096) break;
 			}
 		}
+		finally { ReleaseComObject(enumerator); }
 		return null;
 	}
 
@@ -608,6 +680,7 @@ internal static partial class Launcher
 			object current = FindUpnpMapping(attempt.Collection, record.ExternalPort, record.Protocol);
 			if (current == null)
 			{
+				RemoveTrackedUpnpMapping(record);
 				continue;
 			}
 			try
@@ -622,6 +695,7 @@ internal static partial class Launcher
 					continue;
 				}
 				InvokeComMethod(attempt.Collection, "Remove", record.ExternalPort, record.Protocol);
+				RemoveTrackedUpnpMapping(record);
 			}
 			catch (Exception exception)
 			{
@@ -634,24 +708,148 @@ internal static partial class Launcher
 			}
 		}
 		string status = allDeleted ? "포트 매핑 삭제 완료" : "포트 매핑 삭제 실패";
+		for (int i = 0; i < attempt.Created.Count; i++) MarkTrackedOwnershipInactive(attempt.Created[i].Description, attempt.Created[i].Protocol);
 		Interlocked.Exchange(ref lastUpnpCleanupStatus, TranslateExternalAccessStatus(status));
 		ReportExternalAccessStatus(status, !allDeleted);
 	}
 
-	internal static int ClearAllMineHarborUpnpMappings()
+	private static void RemoveTrackedUpnpMapping(CreatedUpnpMapping record)
+	{
+		EnterUpnpTrackerLock();
+		try
+		{
+			List<UpnpMappedPort> tracked = UpnpMappingOwnershipTracker.LoadMappings();
+			tracked.RemoveAll(delegate(UpnpMappedPort item)
+			{
+				return item.ExternalPort == record.ExternalPort && item.InternalPort == record.InternalPort && string.Equals(item.Protocol, record.Protocol, StringComparison.OrdinalIgnoreCase) && string.Equals(item.InternalIp, record.InternalClient, StringComparison.OrdinalIgnoreCase) && string.Equals(item.Description, record.Description, StringComparison.Ordinal);
+			});
+			UpnpMappingOwnershipTracker.SaveMappings(tracked);
+		}
+		finally { upnpTrackerMutex.ReleaseMutex(); }
+	}
+
+	private static int CleanupTrackedComMappings(object collection)
+	{
+		EnterUpnpTrackerLock();
+		try
+		{
+			List<UpnpMappedPort> tracked = UpnpMappingOwnershipTracker.LoadMappings();
+			List<UpnpMappedPort> remaining = new List<UpnpMappedPort>();
+			int cleared = 0;
+			NetworkDetails network = GetNetworkDetails();
+			string currentLocalIp = network == null ? null : network.LocalIpv4;
+			for (int i = 0; i < tracked.Count; i++)
+			{
+				UpnpMappedPort record = tracked[i];
+			if (IsTrackedOwnerAlive(record))
+			{
+				remaining.Add(record);
+				continue;
+			}
+			bool safeRecord = record.ExternalPort >= 1 && record.ExternalPort <= 65535
+				&& record.InternalPort >= 1 && record.InternalPort <= 65535
+				&& (string.Equals(record.Protocol, "TCP", StringComparison.OrdinalIgnoreCase) || string.Equals(record.Protocol, "UDP", StringComparison.OrdinalIgnoreCase))
+				&& !string.IsNullOrWhiteSpace(record.Description)
+				&& (record.Description.StartsWith("MH-", StringComparison.Ordinal) || record.Description.StartsWith("MineHarbor ", StringComparison.Ordinal))
+				&& string.Equals(record.InternalIp, currentLocalIp, StringComparison.OrdinalIgnoreCase);
+			if (!safeRecord) continue;
+			object current = null;
+			try
+			{
+				current = FindUpnpMapping(collection, record.ExternalPort, record.Protocol);
+				if (current == null) continue;
+				string client = Convert.ToString(GetComProperty(current, "InternalClient"), CultureInfo.InvariantCulture);
+				int port = Convert.ToInt32(GetComProperty(current, "InternalPort"), CultureInfo.InvariantCulture);
+				string description = Convert.ToString(GetComProperty(current, "Description"), CultureInfo.InvariantCulture);
+				if (!string.Equals(client, record.InternalIp, StringComparison.OrdinalIgnoreCase) || port != record.InternalPort || !string.Equals(description, record.Description, StringComparison.Ordinal))
+				{
+					Console.WriteLine("[UPnP] 현재 매핑 소유 정보가 달라 삭제하지 않았습니다: " + record.Protocol + " " + record.ExternalPort);
+					continue;
+				}
+				InvokeComMethod(collection, "Remove", record.ExternalPort, record.Protocol);
+				cleared++;
+			}
+			catch (Exception ex)
+			{
+				remaining.Add(record);
+				Console.WriteLine("[UPnP] 기록된 매핑 정리 실패: " + SummarizeUpnpError(ex));
+			}
+			finally { ReleaseComObject(current); }
+			}
+			UpnpMappingOwnershipTracker.SaveMappings(remaining);
+			return cleared;
+		}
+		finally { upnpTrackerMutex.ReleaseMutex(); }
+	}
+
+	private static void EnterUpnpTrackerLock()
 	{
 		try
 		{
-			IPortMappingService upnpService = new SocketUpnpPortMappingService();
-			var task = upnpService.CleanupMappingsAsync(CancellationToken.None);
-			task.Wait();
-			return task.Result;
+			if (!upnpTrackerMutex.WaitOne(10000)) throw new TimeoutException("다른 MineHarbor 프로세스가 UPnP 소유권 기록을 사용 중입니다.");
 		}
-		catch (Exception ex)
+		catch (AbandonedMutexException)
 		{
-			Console.WriteLine("[UPnP] ClearAllMineHarborUpnpMappings 실패: " + ex.Message);
-			return 0;
+			// 이전 프로세스가 비정상 종료된 경우 현재 스레드가 소유권을 이어받습니다.
 		}
+	}
+
+	private static bool IsTrackedOwnerAlive(UpnpMappedPort record)
+	{
+		string ownerId = record == null ? null : record.ProfileId;
+		if (string.IsNullOrWhiteSpace(ownerId)) return false;
+		string[] parts = ownerId.Split(':');
+		int processId;
+		long startedTicks;
+		if (parts.Length != 2 || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out processId) || !long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out startedTicks)) return false;
+		try
+		{
+			using (Process process = Process.GetProcessById(processId))
+			{
+				if (process.StartTime.ToUniversalTime().Ticks != startedTicks || process.HasExited) return false;
+				if (processId != Process.GetCurrentProcess().Id) return true;
+				lock (activeUpnpOwnershipLock) return activeUpnpOwnershipKeys.Contains(GetUpnpOwnershipKey(record.Description, record.Protocol));
+			}
+		}
+		catch { return false; }
+	}
+
+	private static string GetUpnpOwnershipKey(string description, string protocol)
+	{
+		return (description ?? string.Empty) + "|" + (protocol ?? string.Empty).ToUpperInvariant();
+	}
+
+	private static void MarkTrackedOwnershipInactive(string description, string protocol)
+	{
+		lock (activeUpnpOwnershipLock) activeUpnpOwnershipKeys.Remove(GetUpnpOwnershipKey(description, protocol));
+	}
+
+	internal static Task<UpnpCleanupResult> ClearAllMineHarborUpnpMappingsAsync()
+	{
+		TaskCompletionSource<UpnpCleanupResult> completion = new TaskCompletionSource<UpnpCleanupResult>();
+		Thread worker = new Thread((ThreadStart)delegate
+		{
+			UpnpCleanupResult result = new UpnpCleanupResult();
+			UpnpMappingAttempt attempt = new UpnpMappingAttempt();
+			try
+			{
+				using (ManualResetEvent stopped = new ManualResetEvent(false))
+				{
+					if (!TryDiscoverUpnpCollection(attempt, stopped)) throw new InvalidOperationException(attempt.Error);
+					result.ClearedCount = CleanupTrackedComMappings(attempt.Collection);
+				}
+			}
+			catch (Exception ex) { result.Error = SummarizeUpnpError(ex); }
+			finally { ReleaseUpnpObjects(attempt); completion.TrySetResult(result); }
+		});
+		worker.IsBackground = true;
+		worker.SetApartmentState(ApartmentState.STA);
+		worker.Start();
+		ThreadPool.QueueUserWorkItem(delegate
+		{
+			if (!worker.Join(20000)) completion.TrySetResult(new UpnpCleanupResult { TimedOut = true, Error = "UPnP 정리가 20초 안에 끝나지 않았습니다." });
+		});
+		return completion.Task;
 	}
 
 	private static string ConsumeUpnpCleanupStatus()
@@ -677,6 +875,7 @@ internal static partial class Launcher
 	{
 		object policy = null;
 		object rules = null;
+		bool allowFound = false;
 		try
 		{
 			Type type = Type.GetTypeFromProgID("HNetCfg.FwPolicy2", false);
@@ -685,6 +884,7 @@ internal static partial class Launcher
 				return false;
 			}
 			policy = Activator.CreateInstance(type);
+			int activeProfiles = Convert.ToInt32(GetComProperty(policy, "CurrentProfileTypes"), CultureInfo.InvariantCulture);
 			rules = GetComProperty(policy, "Rules");
 			IEnumerable enumerable = rules as IEnumerable;
 			if (enumerable == null)
@@ -701,10 +901,20 @@ internal static partial class Launcher
 					int action = Convert.ToInt32(GetComProperty(rule, "Action"), CultureInfo.InvariantCulture);
 					int protocol = Convert.ToInt32(GetComProperty(rule, "Protocol"), CultureInfo.InvariantCulture);
 					string localPorts = Convert.ToString(GetComProperty(rule, "LocalPorts"), CultureInfo.InvariantCulture);
-					if (enabled && direction == 1 && action == 1 && protocol == protocolNumber && PortListContains(localPorts, port))
+					int profiles = Convert.ToInt32(GetComProperty(rule, "Profiles"), CultureInfo.InvariantCulture);
+					string application = Convert.ToString(GetComProperty(rule, "ApplicationName"), CultureInfo.InvariantCulture);
+					string service = Convert.ToString(GetComProperty(rule, "ServiceName"), CultureInfo.InvariantCulture);
+					string localAddresses = Convert.ToString(GetComProperty(rule, "LocalAddresses"), CultureInfo.InvariantCulture);
+					string remoteAddresses = Convert.ToString(GetComProperty(rule, "RemoteAddresses"), CultureInfo.InvariantCulture);
+					bool applies = enabled && direction == 1 && protocol == protocolNumber && PortListContains(localPorts, port)
+						&& (profiles == int.MaxValue || (profiles & activeProfiles) != 0)
+						&& string.IsNullOrWhiteSpace(application) && string.IsNullOrWhiteSpace(service)
+						&& IsUnrestrictedFirewallAddress(localAddresses) && IsUnrestrictedFirewallAddress(remoteAddresses);
+					if (applies && action == 0)
 					{
-						return true;
+						return false;
 					}
+					if (applies && action == 1) allowFound = true;
 				}
 				catch
 				{
@@ -728,7 +938,12 @@ internal static partial class Launcher
 			ReleaseComObject(rules);
 			ReleaseComObject(policy);
 		}
-		return false;
+		return allowFound;
+	}
+
+	private static bool IsUnrestrictedFirewallAddress(string value)
+	{
+		return string.IsNullOrWhiteSpace(value) || string.Equals(value.Trim(), "*", StringComparison.Ordinal);
 	}
 
 	private static bool PortListContains(string value, int port)
@@ -770,7 +985,7 @@ internal static partial class Launcher
 			{
 				return true;
 			}
-			if (!string.IsNullOrWhiteSpace(publicIp) && IPAddress.TryParse(publicIp, out publicAddress) && !routerAddress.Equals(publicAddress))
+			if (!string.IsNullOrWhiteSpace(publicIp) && IPAddress.TryParse(publicIp, out publicAddress) && publicAddress.AddressFamily == routerAddress.AddressFamily && !routerAddress.Equals(publicAddress))
 			{
 				return true;
 			}
@@ -860,8 +1075,11 @@ internal static partial class Launcher
 		if (key == "UPnP 장치 검색 중") return "Searching for a UPnP gateway" + suffix;
 		if (key == "UPnP 자동 매핑 중") return "Creating a UPnP port mapping" + suffix;
 		if (key == "UPnP 매핑 성공") return "UPnP mapping succeeded" + suffix;
+		if (key == "UPnP TCP 매핑만 성공") return "Only the UPnP TCP mapping succeeded" + suffix;
 		if (key == "UPnP 매핑 실패") return "UPnP mapping failed" + suffix;
 		if (key == "외부 접속 재검사 중") return "Rechecking external access" + suffix;
+		if (key == "외부 접속 재검사 진행 중") return "An external access recheck is already running" + suffix;
+		if (key == "외부 접속 확인 불가") return "External access could not be checked" + suffix;
 		if (key == "수동 포트포워딩 필요") return "Manual port forwarding required" + suffix;
 		if (key == "CGNAT 가능성 있음") return "CGNAT may be present" + suffix;
 		if (key == "포트 충돌 발생") return "Port mapping conflict" + suffix;
@@ -920,7 +1138,7 @@ internal static partial class Launcher
 		}
 		try
 		{
-			Marshal.FinalReleaseComObject(value);
+			Marshal.ReleaseComObject(value);
 		}
 		catch
 		{

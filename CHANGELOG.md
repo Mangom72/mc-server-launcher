@@ -1,7 +1,23 @@
 ﻿# Changelog
 
-???꾨줈?앺듃???쒗뭹 踰꾩쟾??[Semantic Versioning](https://semver.org/)???ъ슜?⑸땲?? `26.2.45.xx` 媛믪? 蹂꾨룄???대? 鍮뚮뱶 踰덊샇?낅땲??
+제품 버전은 [Semantic Versioning](https://semver.org/)을 사용하며, `26.2.45.xx` 값은 별도의 내부 빌드 번호입니다.
 
+Product versions follow [Semantic Versioning](https://semver.org/), while `26.2.45.xx` is a separate internal build number.
+
+
+## [1.5.19] - 2026-07-18
+
+### Korean
+- **UPnP 소유권 보호**: 실행별 소유권 기록과 현재 매핑 재검증을 추가하여 MineHarbor가 만든 현재 실행 매핑만 삭제하고, 오래되거나 변조된 기록으로 사용자 매핑을 삭제하지 않도록 수정했습니다.
+- **외부 접속 안정성**: TCP·UDP 부분 성공, 검사 서비스 장애, 중복 재검사, IPv4·IPv6 및 가상 어댑터 상태를 구분하고 UPnP 정리를 비동기로 전환했습니다.
+- **공급망 및 데이터 보안**: Forge Installer와 Inno Setup의 해시 검증을 추가하고, 다운로드 리디렉션·크기를 제한했으며, 백업 manifest에 없는 파일과 과도한 압축 해제량을 차단했습니다.
+- **명령 및 빌드 안전성**: 모든 직접 콘솔 경로에 위험 명령 확인을 적용하고, 일반 빌드가 고정 비밀번호 인증서나 사용자 인증서 저장소를 만들지 않도록 변경했습니다.
+
+### English
+- **UPnP ownership protection**: Added per-run ownership tracking and current-mapping verification so MineHarbor removes only mappings created by the same run and never trusts stale or modified records to delete user mappings.
+- **External-access resilience**: Distinguished TCP/UDP partial success, checker outages, duplicate rechecks, dual-stack addresses, and virtual adapters, while making stale UPnP cleanup asynchronous.
+- **Supply-chain and data security**: Added hash checks for Forge Installer and Inno Setup, bounded redirects and download sizes, and rejected backup files absent from the manifest or exceeding extraction limits.
+- **Command and build safety**: Applied dangerous-command confirmation to every direct console path and stopped normal builds from creating fixed-password certificates or modifying the user certificate store.
 
 ## [1.5.18] - 2026-07-16
 

@@ -628,12 +628,26 @@ internal static partial class Launcher
 			actionGrid.Controls.Add(routerButton, 3, 0);
 			
 			clearUpnpButton = CreateToolButton(string.Empty, "secondary");
-			clearUpnpButton.Click += delegate {
-				int cleared = ClearAllMineHarborUpnpMappings();
-				bool korean = string.Equals(Localization.CurrentLanguage, Localization.Korean, StringComparison.OrdinalIgnoreCase);
-				string msg = korean ? (cleared + "개의 남은 포트 매핑을 지웠습니다.") : ("Cleared " + cleared + " stale port mapping(s).");
-				ShowMineHarborDialog(this, msg, ToolText("UPnP 정리", "Clear UPnP"), MessageBoxButtons.OK, MessageBoxIcon.Information);
-			};
+			clearUpnpButton.Click += async delegate {
+				clearUpnpButton.Enabled = false;
+				statusLabel.ForeColor = palette.Muted;
+				statusLabel.Text = ToolText("이전 실행에서 남은 UPnP 매핑을 확인하고 있습니다…", "Checking stale UPnP mappings from previous runs…");
+				try
+				{
+					UpnpCleanupResult result = await ClearAllMineHarborUpnpMappingsAsync();
+					if (result.TimedOut || !string.IsNullOrWhiteSpace(result.Error))
+					{
+						statusLabel.ForeColor = palette.Danger;
+						statusLabel.Text = ToolText("UPnP 정리를 완료하지 못했습니다: ", "Could not complete UPnP cleanup: ") + result.Error;
+						ShowMineHarborDialog(this, statusLabel.Text, ToolText("UPnP 정리", "Clear UPnP"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+						return;
+					}
+					statusLabel.ForeColor = palette.Success;
+					statusLabel.Text = ToolText("이전 실행에서 남은 포트 매핑을 안전하게 정리했습니다: ", "Safely cleared stale mappings from previous runs: ") + result.ClearedCount;
+					ShowMineHarborDialog(this, statusLabel.Text, ToolText("UPnP 정리", "Clear UPnP"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+				}
+				finally { if (!IsDisposed) clearUpnpButton.Enabled = true; }
+			};
 			actionGrid.Controls.Add(clearUpnpButton, 4, 0);
 
 			playitButton = CreateToolButton(string.Empty, "secondary");

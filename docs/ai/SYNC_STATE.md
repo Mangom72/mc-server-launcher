@@ -1,5 +1,16 @@
 ﻿# AI Agent Synchronization State
 
+## Codex Security Remediation - 2026-07-18
+
+- **Current Version**: 1.5.19 (build 26.2.45.59)
+- **Branch**: `codex/audit-ui-ux-security-upnp`
+- **Status**: 감사 후 수정·검증 및 원격 브랜치 업로드 완료, 초안 PR 인증 대기
+- UPnP 매핑을 실행별로 기록하고 현재 내부 IP·포트·프로토콜·설명이 정확히 일치할 때만 삭제합니다. 살아 있는 다른 MineHarbor 프로세스의 기록은 보존합니다.
+- TCP/UDP 부분 성공, 외부 검사 실패, 중복 재검사, CGNAT dual-stack 비교, 가상 어댑터와 방화벽 규칙 판정을 보수적으로 처리합니다.
+- Forge/Inno Setup 다운로드, 백업 복원, 직접 콘솔 위험 명령, 로컬 코드 서명 경로를 강화했습니다.
+- 기준 검증: `build.ps1 -SkipDependencyDownload` 성공, `test.ps1 -LauncherPath artifacts\MineHarbor.exe`에서 `PASSED=21`, `BRIDGE_PROTOCOL_PASSED=8`, 버전·smoke·modern-dialog scan 통과.
+- 실제 공유기 COM 무응답을 프로세스 내부에서 강제로 중단하는 것은 안전하지 않으므로 호출자는 제한 시간 후 복구 기록을 남기며, 제조사별 장치 시험은 별도 격리 환경에서 수행해야 합니다.
+
 ## Current Session Status
 - **Agent Name**: Antigravity
 - **Last Updated**: 2026-07-16T07:18:00Z

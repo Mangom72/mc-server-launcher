@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$LauncherPath
 )
@@ -43,3 +43,12 @@ foreach ($source in $uiSources) {
     if ($text -match 'new\s+(?:System\.Windows\.Forms\.)?Button\s*\(') { throw "네모난 표준 버튼 생성이 남아 있습니다: $($source.Name)" }
 }
 Write-Host 'MODERN_DIALOG_SCAN_OK'
+
+# 감사에서 확인한 공급망·서명 회귀가 다시 들어오지 않도록 정적 안전 조건을 검사합니다.
+$signScript = Get-Content -LiteralPath (Join-Path $projectRoot 'scripts\sign-build.ps1') -Raw
+if ($signScript -match 'New-SelfSignedCertificate|mineharbor123') { throw '고정 비밀번호 또는 자동 개발 인증서 생성 코드가 다시 들어왔습니다.' }
+$launcherSource = Get-Content -LiteralPath (Join-Path $projectRoot 'decompiled\Launcher.decompiled.cs') -Raw
+if ($launcherSource -notmatch 'Forge Installer의 SHA-256 검증에 실패했습니다' -or $launcherSource -notmatch 'AllowAutoRedirect\s*=\s*false') {
+    throw 'Forge 다운로드 해시 또는 리디렉션 검증이 누락되었습니다.'
+}
+Write-Host 'SECURITY_REGRESSION_SCAN_OK'

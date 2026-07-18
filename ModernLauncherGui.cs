@@ -3721,7 +3721,17 @@ internal static partial class Launcher
 
 		{
 
-			string command = commandBox.Text.Trim();
+			string command;
+
+			if (!PrepareDirectServerCommand(this, commandBox.Text, out command))
+
+			{
+
+				commandBox.Focus();
+
+				return;
+
+			}
 
 			if (string.IsNullOrEmpty(command))
 

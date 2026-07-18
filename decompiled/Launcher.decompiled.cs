@@ -2480,10 +2480,26 @@ internal static partial class Launcher
 		{
 			throw new InvalidDataException("Forge 다운로드 주소를 검증하지 못했습니다.");
 		}
-		string installerPath = Path.Combine(serverDirectory, "forge-installer-" + ToSafeDirectoryName(options.MinecraftVersion + "-" + forgeVersion) + ".jar");
-		Console.WriteLine("Forge Installer를 내려받는 중...");
-		DownloadFileWithUserAgent(installerUrl, installerPath + ".다운로드중", GenericServerUserAgent);
-		ReplaceFile(installerPath + ".다운로드중", installerPath);
+		string installerPath = Path.Combine(serverDirectory, "forge-installer-" + ToSafeDirectoryName(options.MinecraftVersion + "-" + forgeVersion) + ".jar");
+		string temporaryPath = installerPath + ".다운로드중";
+		DeleteFileIfPresent(temporaryPath);
+		try
+		{
+			Console.WriteLine("Forge Installer를 내려받는 중...");
+			string[] allowedHosts = new string[1] { "maven.minecraftforge.net" };
+			DownloadFileWithUserAgent(installerUrl, temporaryPath, GenericServerUserAgent, allowedHosts);
+			string checksumText = DownloadTextWithUserAgent(installerUrl + ".sha256", GenericServerUserAgent).Trim();
+			string expectedSha256 = checksumText.Split(new char[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)[0];
+			if (expectedSha256.Length != 64 || !HashMatches(temporaryPath, expectedSha256))
+			{
+				throw new InvalidDataException("Forge Installer의 SHA-256 검증에 실패했습니다.");
+			}
+			ReplaceFile(temporaryPath, installerPath);
+		}
+		finally
+		{
+			DeleteFileIfPresent(temporaryPath);
+		}
 		Console.WriteLine("Forge 서버 설치를 실행합니다. 네트워크 상태에 따라 시간이 걸릴 수 있습니다.");
 		RunForgeInstaller(javaPath, installerPath, serverDirectory);
 		if (File.Exists(runBat))
@@ -2683,28 +2699,56 @@ internal static partial class Launcher
 		return false;
 	}
 
-	private static void DownloadFileWithUserAgent(string url, string destinationPath, string userAgent)
-	{
-		HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
-		httpWebRequest.Method = "GET";
-		httpWebRequest.UserAgent = userAgent;
-		httpWebRequest.Timeout = 60000;
-		httpWebRequest.ReadWriteTimeout = 60000;
-		httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-		using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
-		{
-			if (httpWebResponse.StatusCode != HttpStatusCode.OK)
-			{
-				throw new WebException("HTTP " + (int)httpWebResponse.StatusCode);
-			}
-			using (Stream stream = httpWebResponse.GetResponseStream())
-			using (FileStream fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None))
-			{
-				stream.CopyTo(fileStream, 1048576);
-				fileStream.Flush(true);
-			}
-		}
-	}
+	private static void DownloadFileWithUserAgent(string url, string destinationPath, string userAgent)
+	{
+		Uri source = new Uri(url);
+		DownloadFileWithUserAgent(url, destinationPath, userAgent, new string[1] { source.Host });
+	}
+
+	private static void DownloadFileWithUserAgent(string url, string destinationPath, string userAgent, string[] allowedHosts)
+	{
+		Uri current = new Uri(url);
+		for (int redirect = 0; redirect <= 5; redirect++)
+		{
+			if (!IsAllowedDownloadHost(current.AbsoluteUri, allowedHosts)) throw new InvalidDataException("다운로드 호스트를 검증하지 못했습니다.");
+			HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(current);
+			httpWebRequest.Method = "GET";
+			httpWebRequest.UserAgent = userAgent;
+			httpWebRequest.Timeout = 60000;
+			httpWebRequest.ReadWriteTimeout = 60000;
+			httpWebRequest.AllowAutoRedirect = false;
+			httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+			using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
+			{
+				if (httpWebResponse.StatusCode == HttpStatusCode.MovedPermanently || httpWebResponse.StatusCode == HttpStatusCode.Redirect || httpWebResponse.StatusCode == HttpStatusCode.RedirectMethod || httpWebResponse.StatusCode == HttpStatusCode.TemporaryRedirect)
+				{
+					string location = httpWebResponse.Headers[HttpResponseHeader.Location];
+					Uri next;
+					if (string.IsNullOrWhiteSpace(location) || !Uri.TryCreate(current, location, out next) || !IsAllowedDownloadHost(next.AbsoluteUri, allowedHosts)) throw new InvalidDataException("허용되지 않은 다운로드 리디렉션입니다.");
+					current = next;
+					continue;
+				}
+				if (httpWebResponse.StatusCode != HttpStatusCode.OK) throw new WebException("HTTP " + (int)httpWebResponse.StatusCode);
+				if (httpWebResponse.ContentLength > 536870912L) throw new InvalidDataException("다운로드 파일이 안전 크기 제한을 초과했습니다.");
+				using (Stream stream = httpWebResponse.GetResponseStream())
+				using (FileStream fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None))
+				{
+					byte[] buffer = new byte[131072];
+					long total = 0L;
+					int read;
+					while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+					{
+						total = checked(total + read);
+						if (total > 536870912L) throw new InvalidDataException("다운로드 파일이 안전 크기 제한을 초과했습니다.");
+						fileStream.Write(buffer, 0, read);
+					}
+					fileStream.Flush(true);
+				}
+				return;
+			}
+		}
+		throw new InvalidDataException("다운로드 리디렉션 횟수가 안전 제한을 초과했습니다.");
+	}
 
 	private static void BackupManagedServerJar(string serverDirectory, string jarPath, string serverType, string minecraftVersion)
 	{
@@ -3056,17 +3100,19 @@ internal static partial class Launcher
 		}
 	}
 
-	private static string DownloadTextWithUserAgent(string url, string userAgent)
+	private static string DownloadTextWithUserAgent(string url, string userAgent)
 	{
 		HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
 		httpWebRequest.Method = "GET";
 		httpWebRequest.UserAgent = userAgent;
 		httpWebRequest.Timeout = 15000;
-		httpWebRequest.ReadWriteTimeout = 15000;
-		httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-		using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
-		{
-			using (Stream stream = httpWebResponse.GetResponseStream())
+		httpWebRequest.ReadWriteTimeout = 15000;
+		httpWebRequest.AllowAutoRedirect = false;
+		httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+		using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
+		{
+			if (httpWebResponse.ContentLength > 8388608L) throw new InvalidDataException("응답이 안전 크기 제한을 초과했습니다.");
+			using (Stream stream = httpWebResponse.GetResponseStream())
 			{
 				using (StreamReader streamReader = new StreamReader(stream, Encoding.UTF8))
 				{
@@ -3074,7 +3120,7 @@ internal static partial class Launcher
 					{
 						throw new WebException("HTTP " + (int)httpWebResponse.StatusCode);
 					}
-					return streamReader.ReadToEnd();
+					return ReadLimitedText(streamReader, 8388608);
 				}
 			}
 		}
@@ -3416,15 +3462,15 @@ internal static partial class Launcher
 			process.WaitForExit();
 			serverStopped.Set();
 			bool externalThreadCompleted = thread.Join(45000);
-			if (!externalThreadCompleted)
-			{
-				Console.WriteLine("[UPnP] 서버 종료 후 매핑 정리가 제한 시간 안에 끝나지 않았습니다.");
-				ShowLauncherNotice(LauncherUiText("포트 매핑 삭제 실패", "Could not remove the port mapping"), true);
-			}
-			else
-			{
-				serverStopped.Dispose();
-			}
+			if (!externalThreadCompleted)
+			{
+				Console.WriteLine("[UPnP] 서버 종료 후 매핑 정리가 제한 시간 안에 끝나지 않았습니다.");
+				ShowLauncherNotice(LauncherUiText("포트 매핑 삭제 실패", "Could not remove the port mapping"), true);
+			}
+			else
+			{
+				serverStopped.Dispose();
+			}
 			int exitCode = process.ExitCode;
 			if (exitCode == 0 && Volatile.Read(ref currentServerStopRequested) == 0 && Volatile.Read(ref serverReachedReadyState) == 0)
 			{
@@ -3629,13 +3675,13 @@ internal static partial class Launcher
 				if (unicastAddress.Address.AddressFamily == AddressFamily.InterNetwork)
 				{
 					unicastIPAddressInformation = unicastAddress;
-					if (iPAddress != null && unicastAddress.Address.Equals(iPAddress))
+					if (iPAddress != null && unicastAddress.Address.Equals(iPAddress) && IsPreferredLanAdapter(networkInterface2))
 					{
 						return BuildNetworkDetails(networkInterface2, iPProperties, unicastIPAddressInformation);
 					}
 				}
 			}
-			if (networkInterface == null && unicastIPAddressInformation != null && iPProperties.GatewayAddresses.Count > 0)
+			if (networkInterface == null && unicastIPAddressInformation != null && iPProperties.GatewayAddresses.Count > 0 && IsPreferredLanAdapter(networkInterface2))
 			{
 				networkInterface = networkInterface2;
 			}
@@ -3651,8 +3697,17 @@ internal static partial class Launcher
 				}
 			}
 		}
-		return result;
-	}
+		return result;
+	}
+
+	private static bool IsPreferredLanAdapter(NetworkInterface adapter)
+	{
+		if (adapter == null || adapter.NetworkInterfaceType == NetworkInterfaceType.Tunnel || adapter.NetworkInterfaceType == NetworkInterfaceType.Ppp) return false;
+		string identity = ((adapter.Name ?? string.Empty) + " " + (adapter.Description ?? string.Empty)).ToLowerInvariant();
+		string[] virtualMarkers = new string[] { "vpn", "virtual", "hyper-v", "vmware", "virtualbox", "tap-", "tailscale", "zerotier", "wintun" };
+		for (int i = 0; i < virtualMarkers.Length; i++) if (identity.Contains(virtualMarkers[i])) return false;
+		return true;
+	}
 
 	private static NetworkDetails BuildNetworkDetails(NetworkInterface adapter, IPInterfaceProperties properties, UnicastIPAddressInformation address)
 	{
@@ -3694,17 +3749,19 @@ internal static partial class Launcher
 		return "확인되지 않음";
 	}
 
-	private static string DownloadText(string url)
+	private static string DownloadText(string url)
 	{
 		HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
 		httpWebRequest.Method = "GET";
 		httpWebRequest.UserAgent = GetLauncherIntegrationUserAgent();
 		httpWebRequest.Timeout = 15000;
-		httpWebRequest.ReadWriteTimeout = 15000;
+		httpWebRequest.ReadWriteTimeout = 15000;
+		httpWebRequest.AllowAutoRedirect = false;
 		httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-		using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
-		{
-			using (Stream stream = httpWebResponse.GetResponseStream())
+		using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
+		{
+			if (httpWebResponse.ContentLength > 65536L) throw new InvalidDataException("외부 검사 응답이 안전 크기 제한을 초과했습니다.");
+			using (Stream stream = httpWebResponse.GetResponseStream())
 			{
 				using (StreamReader streamReader = new StreamReader(stream, Encoding.UTF8))
 				{
@@ -3712,11 +3769,24 @@ internal static partial class Launcher
 					{
 						throw new WebException("HTTP " + (int)httpWebResponse.StatusCode);
 					}
-					return streamReader.ReadToEnd();
+					return ReadLimitedText(streamReader, 65536);
 				}
 			}
 		}
-	}
+	}
+
+	private static string ReadLimitedText(TextReader reader, int maximumCharacters)
+	{
+		StringBuilder builder = new StringBuilder();
+		char[] buffer = new char[4096];
+		int read;
+		while ((read = reader.Read(buffer, 0, buffer.Length)) > 0)
+		{
+			if (builder.Length + read > maximumCharacters) throw new InvalidDataException("응답이 안전 크기 제한을 초과했습니다.");
+			builder.Append(buffer, 0, read);
+		}
+		return builder.ToString();
+	}
 
 	private static void DeleteFileIfPresent(string path)
 	{

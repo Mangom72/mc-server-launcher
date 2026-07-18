@@ -713,6 +713,20 @@ internal static partial class Launcher
 		return new HashSet<string>(new string[] { "kill", "clear", "fill", "clone", "setblock", "worldborder", "reload", "execute", "data", "summon", "forceload", "tick" }, StringComparer.OrdinalIgnoreCase).Contains(root);
 	}
 
+	private static bool PrepareDirectServerCommand(System.Windows.Forms.IWin32Window owner, string input, out string command)
+	{
+		command = NormalizeCommandForSend(input);
+		if (string.IsNullOrWhiteSpace(command)) return false;
+		if (!RequiresQuickCommandConfirmation(command, null) && !IsAdvancedDangerousCommand(command)) return true;
+		System.Windows.Forms.DialogResult result = ShowMineHarborDialog(owner,
+			string.Equals(Localization.CurrentLanguage, Localization.Korean, StringComparison.OrdinalIgnoreCase)
+				? "다음 명령은 서버 상태나 데이터를 변경할 수 있습니다. 실행하시겠습니까?\r\n\r\n" + command
+				: "This command can change server state or data. Run it?\r\n\r\n" + command,
+			string.Equals(Localization.CurrentLanguage, Localization.Korean, StringComparison.OrdinalIgnoreCase) ? "명령 실행 확인" : "Confirm command",
+			System.Windows.Forms.MessageBoxButtons.YesNo, System.Windows.Forms.MessageBoxIcon.Warning);
+		return result == System.Windows.Forms.DialogResult.Yes;
+	}
+
 	private static IEnumerable<string> GetArgumentCandidates(string argument, IEnumerable<string> onlinePlayers)
 	{
 		if (argument == "gamemode") return new string[] { "survival", "creative", "adventure", "spectator" };
