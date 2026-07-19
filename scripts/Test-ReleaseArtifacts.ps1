@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$ArtifactsDirectory
 )
@@ -41,8 +41,9 @@ if ((Get-Item -LiteralPath $portable).Length -gt 25MB) { throw 'Portable launche
 if ((Get-FileHash -LiteralPath $legacyPortable -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $portable -Algorithm SHA256).Hash) { throw 'Legacy launcher compatibility asset does not match MineHarbor.exe.' }
 if ([long]$metadata.size -ne (Get-Item -LiteralPath $portable).Length) { throw 'Launcher update metadata size mismatch.' }
 if (![string]::Equals([string]$metadata.sha256, (Get-FileHash -LiteralPath $portable -Algorithm SHA256).Hash, [StringComparison]::OrdinalIgnoreCase)) { throw 'Launcher update metadata hash mismatch.' }
-if (!([string]$metadata.download_url).EndsWith('/Minecraft-Server-Launcher.exe', [StringComparison]::OrdinalIgnoreCase)) { throw 'Legacy launcher update URL is missing.' }
-if (!([string]$metadata.primary_download_url).EndsWith('/MineHarbor.exe', [StringComparison]::OrdinalIgnoreCase)) { throw 'MineHarbor primary update URL is missing.' }
+$releasePrefix = "https://github.com/Mangom72/MineHarbor/releases/download/v$($version.productVersion)/"
+if (![string]::Equals([string]$metadata.download_url, $releasePrefix + 'Minecraft-Server-Launcher.exe', [StringComparison]::Ordinal)) { throw 'Legacy launcher update URL does not use the canonical release repository.' }
+if (![string]::Equals([string]$metadata.primary_download_url, $releasePrefix + 'MineHarbor.exe', [StringComparison]::Ordinal)) { throw 'MineHarbor primary update URL does not use the canonical release repository.' }
 $releaseNotesPath = Join-Path $artifacts 'release-notes.md'
 if (!(Test-Path -LiteralPath $releaseNotesPath) -or (Get-Item -LiteralPath $releaseNotesPath).Length -eq 0) { throw 'Generated release notes are missing.' }
 $changelog = [IO.File]::ReadAllText((Join-Path $projectRoot 'CHANGELOG.md'), [Text.Encoding]::UTF8)
@@ -53,6 +54,7 @@ if (!$section.Success -or $firstChange.Count -eq 0 -or ([string]$metadata.releas
 if ([IO.File]::ReadAllText($releaseNotesPath, [Text.Encoding]::UTF8).IndexOf($firstChange[0].Trim(), [StringComparison]::Ordinal) -lt 0) { throw 'GitHub release notes do not match the current CHANGELOG section.' }
 $bridge = Join-Path $artifacts "MineHarbor-Command-Bridge-Paper-v$($version.productVersion).jar"
 if ([int]$metadata.bridge.protocol -ne 1 -or [string]$metadata.bridge.minimum_minecraft -ne '1.13' -or [string]$metadata.bridge.maximum_minecraft -ne '26.2') { throw 'Bridge compatibility metadata mismatch.' }
+if (![string]::Equals([string]$metadata.bridge.download_url, $releasePrefix + "MineHarbor-Command-Bridge-Paper-v$($version.productVersion).jar", [StringComparison]::Ordinal)) { throw 'Bridge update URL does not use the canonical release repository.' }
 if ([long]$metadata.bridge.size -ne (Get-Item -LiteralPath $bridge).Length) { throw 'Bridge metadata size mismatch.' }
 if (![string]::Equals([string]$metadata.bridge.sha256, (Get-FileHash -LiteralPath $bridge -Algorithm SHA256).Hash, [StringComparison]::OrdinalIgnoreCase)) { throw 'Bridge metadata hash mismatch.' }
 

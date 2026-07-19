@@ -5,6 +5,20 @@
 Product versions follow [Semantic Versioning](https://semver.org/), while `26.2.45.xx` is a separate internal build number.
 
 
+## [1.5.21] - 2026-07-20
+
+### Korean
+- **UPnP 기본 경로 및 백업 강화**: 직접 SSDP/SOAP 매핑을 기본 경로로 완성하고 Windows NATUPnP COM을 보조 경로로 유지했으며, 기본 외부 포트가 충돌하면 최대 8개의 대체 포트를 순서대로 시도합니다.
+- **반복 실행 수명 주기 안정화**: 서버 중단 시 진행 중인 SOAP 요청을 취소하고, 이전 실행의 지연 정리가 새 실행의 매핑을 삭제하지 않도록 실행 세대·정리 경합 보호를 추가했습니다.
+- **매핑 복구 및 소유권 보호**: 추가 응답 유실 시 공유기 상태를 재조회하고, 설명·프로토콜·외부/내부 포트·내부 IP가 정확히 일치하는 MineHarbor 소유 매핑만 삭제합니다.
+- **자동 업데이트 경로 정비**: 런처와 릴리스 메타데이터가 정식 `Mangom72/MineHarbor` GitHub Release를 사용하도록 통일하고, 릴리스 검증에서 다운로드 URL·크기·SHA-256을 확인합니다.
+
+### English
+- **Stronger UPnP primary and fallback paths**: Completed direct SSDP/SOAP mapping as the primary path, retained Windows NATUPnP COM as a fallback, and added up to eight alternate external-port attempts when the preferred port conflicts.
+- **Stable repeated-run lifecycle**: Cancelled in-flight SOAP calls when the server stops and added generation and cleanup-race guards so delayed cleanup from an older run cannot remove a newer mapping.
+- **Mapping recovery and ownership protection**: Rechecked router state after a lost add response and removed only MineHarbor-owned mappings whose description, protocol, external and internal ports, and internal address all match exactly.
+- **Canonical automatic-update path**: Standardized launcher and metadata downloads on the official `Mangom72/MineHarbor` GitHub Release and verify release URLs, sizes, and SHA-256 hashes before publication.
+
 ## [1.5.20] - 2026-07-18
 
 ### Korean

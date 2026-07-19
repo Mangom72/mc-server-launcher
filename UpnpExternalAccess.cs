@@ -36,7 +36,11 @@ internal static partial class Launcher
 	{
 		public object NatObject;
 		public object Collection;
+		public SocketUpnpPortMappingService SocketService;
+		public readonly List<UpnpMappedPort> SocketCreated = new List<UpnpMappedPort>();
 		public readonly List<CreatedUpnpMapping> Created = new List<CreatedUpnpMapping>();
+		public int ExternalPort;
+		public long Generation;
 		public string RouterExternalIp;
 		public bool PortConflict;
 		public bool ExistingMatchingMapping;
@@ -58,9 +62,12 @@ internal static partial class Launcher
 	private static readonly object activeUpnpOwnershipLock = new object();
 	private static readonly HashSet<string> activeUpnpOwnershipKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 	private static readonly Mutex upnpTrackerMutex = new Mutex(false, "Local\\MineHarbor-UpnpTracker-v1");
+	private static long currentUpnpGeneration;
+	private static int upnpComCleanupInProgress;
 	private const int UpnpDiscoveryAttemptCount = 3;
 	private const int UpnpMappingAttemptCount = 3;
 	private const int UpnpMappingVerificationCount = 3;
+	private const int UpnpFallbackPortCount = 8;
 
 	private static void ConfigureExternalAccessThread(Thread thread)
 	{
@@ -118,7 +125,7 @@ internal static partial class Launcher
 		bool udpNeeded = IsUdpMappingNeeded(serverDirectory);
 		ReportExternalAccessStatus("UPnP 장치 검색 중", false);
 		UpnpMappingAttempt attempt = TryCreateUpnpMappings(serverPort, network, udpNeeded, serverStopped);
-		if (attempt.Collection == null)
+		if (attempt.Collection == null && attempt.SocketService == null)
 		{
 			ReportExternalAccessStatus("UPnP 매핑 실패", true);
 			bool cgnatWithoutDevice = IsCgnatPossible(attempt.RouterExternalIp, initial.PublicIp);
@@ -145,7 +152,7 @@ internal static partial class Launcher
 
 			if (attempt.Created.Count > 0 && (!attempt.UdpRequired || attempt.UdpMapped))
 			{
-				ReportExternalAccessStatus("UPnP 매핑 성공", false);
+				ReportExternalAccessStatus(attempt.ExternalPort == serverPort ? "UPnP 매핑 성공" : "UPnP 대체 포트 매핑 성공", false);
 			}
 			else if (attempt.Created.Count > 0)
 			{
@@ -165,14 +172,15 @@ internal static partial class Launcher
 			{
 				return;
 			}
-			ExternalPortCheckResult recheck = CheckExternalPort(serverPort, serverStopped, 5);
+			ExternalPortCheckResult recheck = CheckExternalPort(attempt.ExternalPort, serverStopped, 5);
 			if (recheck.Reachable)
 			{
-				string address = FormatExternalAddress(recheck.PublicIp, serverPort);
+				string address = FormatExternalAddress(recheck.PublicIp, attempt.ExternalPort);
 				SetLauncherConnectionAddress(address);
 				Console.WriteLine("[외부 접속] UPnP 처리 후 외부 접속 성공: " + address);
 				bool completeMapping = attempt.Created.Count > 0 && (!attempt.UdpRequired || attempt.UdpMapped);
-				ReportExternalAccessStatus(completeMapping ? "UPnP 매핑 성공 · " + address : attempt.Created.Count > 0 ? "UPnP TCP 매핑만 성공 · " + address : "기존 포트포워딩 정상 · " + address, !completeMapping && attempt.Created.Count > 0);
+				string successStatus = attempt.ExternalPort == serverPort ? "UPnP 매핑 성공 · " + address : "UPnP 대체 포트 매핑 성공 · " + address;
+				ReportExternalAccessStatus(completeMapping ? successStatus : attempt.Created.Count > 0 ? "UPnP TCP 매핑만 성공 · " + address : "기존 포트포워딩 정상 · " + address, !completeMapping && attempt.Created.Count > 0);
 			}
 			else
 			{
@@ -328,6 +336,8 @@ internal static partial class Launcher
 	private static UpnpMappingAttempt TryCreateUpnpMappings(int serverPort, NetworkDetails network, bool udpNeeded, WaitHandle stopped)
 	{
 		UpnpMappingAttempt result = new UpnpMappingAttempt();
+		result.ExternalPort = serverPort;
+		result.Generation = Interlocked.Increment(ref currentUpnpGeneration);
 		if (network == null || string.IsNullOrWhiteSpace(network.LocalIpv4))
 		{
 			result.Error = "현재 PC의 로컬 IPv4 주소를 확인하지 못했습니다.";
@@ -340,23 +350,41 @@ internal static partial class Launcher
 				result.Error = "서버가 종료되어 UPnP 매핑을 중단했습니다.";
 				return result;
 			}
+			if (Volatile.Read(ref upnpComCleanupInProgress) != 0)
+			{
+				result.Error = "이전 서버 실행의 Windows COM UPnP 정리가 아직 끝나지 않아 새 매핑을 만들지 않았습니다. 잠시 후 다시 시도해 주세요.";
+				return result;
+			}
+			string token = Guid.NewGuid().ToString("N").Substring(0, 12);
+			string description = "MH-" + token;
+			result.UdpRequired = udpNeeded;
+			string socketError;
+			if (TryCreateSocketUpnpMappings(result, serverPort, network.LocalIpv4, udpNeeded, description, stopped, out socketError))
+			{
+				return result;
+			}
+			if (stopped.WaitOne(0))
+			{
+				result.Error = "서버가 종료되어 UPnP 매핑을 중단했습니다.";
+				return result;
+			}
+			if (!string.IsNullOrWhiteSpace(socketError)) Console.WriteLine("[UPnP] SSDP/SOAP 방식 실패, Windows COM 방식으로 다시 시도합니다: " + socketError);
 			if (!TryDiscoverUpnpCollection(result, stopped))
 			{
+				if (!string.IsNullOrWhiteSpace(socketError)) result.Error = "SSDP/SOAP: " + socketError + " / Windows COM: " + (result.Error ?? string.Empty);
 				return result;
 			}
 			int recovered = CleanupTrackedComMappings(result.Collection);
 			if (recovered > 0) Console.WriteLine("[UPnP] 이전 실행에서 남은 매핑 " + recovered.ToString(CultureInfo.InvariantCulture) + "개를 안전하게 정리했습니다.");
 			ReportExternalAccessStatus("UPnP 자동 매핑 중", false);
-			string token = Guid.NewGuid().ToString("N").Substring(0, 12);
-			string description = "MH-" + token;
-			result.UdpRequired = udpNeeded;
-			if (!TryAddSingleUpnpMapping(result, serverPort, serverPort, "TCP", network.LocalIpv4, description, stopped))
+			int[] candidates = GetUpnpExternalPortCandidates(serverPort);
+			if (!TryAddTcpUpnpMappingWithFallback(result, candidates, serverPort, network.LocalIpv4, description, stopped))
 			{
 				return result;
 			}
 			if (udpNeeded)
 			{
-				if (!TryAddSingleUpnpMapping(result, serverPort, serverPort, "UDP", network.LocalIpv4, description, stopped))
+				if (!TryAddSingleUpnpMapping(result, result.ExternalPort, serverPort, "UDP", network.LocalIpv4, description, stopped))
 				{
 					if (result.PortConflict)
 					{
@@ -374,6 +402,109 @@ internal static partial class Launcher
 			result.Error = SummarizeUpnpError(exception);
 		}
 		return result;
+	}
+
+	private static bool TryAddTcpUpnpMappingWithFallback(UpnpMappingAttempt attempt, int[] candidates, int internalPort, string internalClient, string description, WaitHandle stopped)
+	{
+		string lastConflict = null;
+		for (int i = 0; candidates != null && i < candidates.Length; i++)
+		{
+			attempt.PortConflict = false;
+			attempt.Error = null;
+			if (TryAddSingleUpnpMapping(attempt, candidates[i], internalPort, "TCP", internalClient, description, stopped))
+			{
+				attempt.ExternalPort = candidates[i];
+				if (candidates.Length > 0 && candidates[i] != candidates[0]) Console.WriteLine("[UPnP] 기본 외부 포트가 충돌하여 COM 대체 포트 " + candidates[i].ToString(CultureInfo.InvariantCulture) + "를 사용합니다.");
+				return true;
+			}
+			if (!attempt.PortConflict || stopped.WaitOne(0)) break;
+			lastConflict = attempt.Error;
+		}
+		if (!string.IsNullOrWhiteSpace(lastConflict)) attempt.Error = lastConflict + " 대체 외부 포트도 사용할 수 없습니다.";
+		return false;
+	}
+
+	private static bool TryCreateSocketUpnpMappings(UpnpMappingAttempt attempt, int serverPort, string internalIp, bool udpNeeded, string description, WaitHandle stopped, out string error)
+	{
+		error = null;
+		SocketUpnpPortMappingService service = new SocketUpnpPortMappingService();
+		CancellationTokenSource cancellation = new CancellationTokenSource();
+		RegisteredWaitHandle registration = null;
+		try
+		{
+			cancellation.CancelAfter(TimeSpan.FromSeconds(22));
+			registration = ThreadPool.RegisterWaitForSingleObject(stopped, delegate(object state, bool timedOut)
+			{
+				((CancellationTokenSource)state).Cancel();
+			}, cancellation, -1, true);
+			try
+			{
+				service.CleanupMappingsAsync(cancellation.Token).GetAwaiter().GetResult();
+			}
+			catch (OperationCanceledException) { throw; }
+			catch (Exception cleanupError)
+			{
+				Console.WriteLine("[UPnP] 이전 SSDP/SOAP 매핑 정리를 건너뜁니다: " + SummarizeUpnpError(cleanupError));
+			}
+			UpnpMappingResult mapped = service.MapPortsWithFallbackAsync(GetUpnpExternalPortCandidates(serverPort), serverPort, internalIp, udpNeeded, description, cancellation.Token).GetAwaiter().GetResult();
+			bool tcpUsable = mapped.Success || mapped.MappedTcpCount > 0 || mapped.ExistingMatchingMapping;
+			if (!tcpUsable)
+			{
+				error = mapped.ErrorMessage;
+				return false;
+			}
+			attempt.SocketService = service;
+			attempt.ExternalPort = mapped.ExternalPort;
+			attempt.ExistingMatchingMapping = mapped.ExistingMatchingMapping;
+			attempt.UdpMapped = !udpNeeded || mapped.Success;
+			attempt.PortConflict = false;
+			attempt.Error = mapped.ErrorMessage;
+			for (int i = 0; i < mapped.CreatedMappings.Count; i++)
+			{
+				UpnpMappedPort record = mapped.CreatedMappings[i];
+				attempt.SocketCreated.Add(record);
+				CreatedUpnpMapping created = new CreatedUpnpMapping();
+				created.ExternalPort = record.ExternalPort;
+				created.InternalPort = record.InternalPort;
+				created.InternalClient = record.InternalIp;
+				created.Protocol = record.Protocol;
+				created.Description = record.Description;
+				attempt.Created.Add(created);
+			}
+			if (attempt.ExternalPort != serverPort) Console.WriteLine("[UPnP] 기본 외부 포트가 충돌하여 SSDP/SOAP 대체 포트 " + attempt.ExternalPort.ToString(CultureInfo.InvariantCulture) + "를 사용합니다.");
+			Console.WriteLine("[UPnP] 순수 C# SSDP/SOAP 방식으로 포트 매핑을 준비했습니다.");
+			return true;
+		}
+		catch (OperationCanceledException)
+		{
+			error = stopped.WaitOne(0) ? "서버가 종료되어 SSDP/SOAP 매핑을 중단했습니다." : "SSDP/SOAP 매핑 제한 시간을 초과했습니다.";
+			return false;
+		}
+		catch (Exception ex)
+		{
+			error = SummarizeUpnpError(ex);
+			return false;
+		}
+		finally
+		{
+			if (registration != null) registration.Unregister(null);
+			cancellation.Dispose();
+			if (attempt.SocketService == null) service.Dispose();
+		}
+	}
+
+	internal static int[] GetUpnpExternalPortCandidates(int preferredPort)
+	{
+		List<int> candidates = new List<int>();
+		if (preferredPort >= 1 && preferredPort <= 65535) candidates.Add(preferredPort);
+		for (int offset = 1; candidates.Count < UpnpFallbackPortCount + 1; offset++)
+		{
+			int candidate = preferredPort + offset;
+			if (candidate > 65535) candidate = 49152 + ((candidate - 65536) % (65535 - 49152 + 1));
+			if (candidate < 1024 || candidates.Contains(candidate)) continue;
+			candidates.Add(candidate);
+		}
+		return candidates.ToArray();
 	}
 
 	private static bool TryDiscoverUpnpCollection(UpnpMappingAttempt attempt, WaitHandle stopped)
@@ -520,6 +651,11 @@ internal static partial class Launcher
 				// Add 호출이 응답 전에 성공했을 수 있으므로 런처 소유 매핑으로 회수합니다.
 				RecordCreatedUpnpMapping(attempt, externalPort, internalPort, protocol, internalClient, description);
 			}
+			else if (TryAdoptTrackedUpnpMapping(externalPort, internalPort, protocol, internalClient, existingDescription, null, null))
+			{
+				// 직전 서버 실행의 정리가 지연된 경우 새 실행으로 소유권을 넘겨 종료 시 한 번만 정리합니다.
+				RecordCreatedUpnpMapping(attempt, externalPort, internalPort, protocol, internalClient, existingDescription);
+			}
 			else
 			{
 				attempt.ExistingMatchingMapping = true;
@@ -562,7 +698,7 @@ internal static partial class Launcher
 		PersistTrackedUpnpMapping(externalPort, internalPort, protocol, internalClient, description);
 	}
 
-	private static void PersistTrackedUpnpMapping(int externalPort, int internalPort, string protocol, string internalClient, string description)
+	private static void PersistTrackedUpnpMapping(int externalPort, int internalPort, string protocol, string internalClient, string description, string serviceType = null, string controlUrl = null)
 	{
 		EnterUpnpTrackerLock();
 		try
@@ -570,12 +706,14 @@ internal static partial class Launcher
 			List<UpnpMappedPort> tracked = UpnpMappingOwnershipTracker.LoadMappings();
 			UpnpMappedPort persisted = new UpnpMappedPort();
 			persisted.ExternalPort = externalPort;
-			Process ownerProcess = Process.GetCurrentProcess();
-			persisted.ProfileId = ownerProcess.Id.ToString(CultureInfo.InvariantCulture) + ":" + ownerProcess.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture);
+			persisted.ProfileId = GetCurrentUpnpOwnerId();
 			persisted.InternalPort = internalPort;
 			persisted.InternalIp = internalClient;
 			persisted.Protocol = protocol.ToUpperInvariant();
 			persisted.Description = description;
+			persisted.ServiceType = serviceType;
+			persisted.ControlUrl = controlUrl;
+			persisted.RouterId = string.IsNullOrWhiteSpace(controlUrl) ? null : new Uri(controlUrl).Host;
 			persisted.CreatedAt = DateTime.UtcNow;
 			for (int i = 0; i < tracked.Count; i++)
 			{
@@ -595,6 +733,48 @@ internal static partial class Launcher
 			lock (activeUpnpOwnershipLock) activeUpnpOwnershipKeys.Add(GetUpnpOwnershipKey(description, protocol));
 		}
 		finally { upnpTrackerMutex.ReleaseMutex(); }
+	}
+
+	private static bool TryAdoptTrackedUpnpMapping(int externalPort, int internalPort, string protocol, string internalClient, string description, string serviceType, string controlUrl)
+	{
+		if (string.IsNullOrWhiteSpace(description) || !description.StartsWith("MH-", StringComparison.Ordinal)) return false;
+		EnterUpnpTrackerLock();
+		try
+		{
+			List<UpnpMappedPort> tracked = UpnpMappingOwnershipTracker.LoadMappings();
+			string currentOwner = GetCurrentUpnpOwnerId();
+			for (int i = 0; i < tracked.Count; i++)
+			{
+				UpnpMappedPort item = tracked[i];
+				bool exact = item.ExternalPort == externalPort && item.InternalPort == internalPort
+					&& string.Equals(item.Protocol, protocol, StringComparison.OrdinalIgnoreCase)
+					&& string.Equals(item.InternalIp, internalClient, StringComparison.OrdinalIgnoreCase)
+					&& string.Equals(item.Description, description, StringComparison.Ordinal);
+				if (!exact) continue;
+				if (IsTrackedOwnerAlive(item) && !string.Equals(item.ProfileId, currentOwner, StringComparison.Ordinal)) return false;
+				item.ProfileId = currentOwner;
+				item.CreatedAt = DateTime.UtcNow;
+				if (!string.IsNullOrWhiteSpace(serviceType)) item.ServiceType = serviceType;
+				if (!string.IsNullOrWhiteSpace(controlUrl))
+				{
+					item.ControlUrl = controlUrl;
+					item.RouterId = new Uri(controlUrl).Host;
+				}
+				UpnpMappingOwnershipTracker.SaveMappings(tracked);
+				lock (activeUpnpOwnershipLock) activeUpnpOwnershipKeys.Add(GetUpnpOwnershipKey(description, protocol));
+				return true;
+			}
+			return false;
+		}
+		finally { upnpTrackerMutex.ReleaseMutex(); }
+	}
+
+	private static string GetCurrentUpnpOwnerId()
+	{
+		using (Process ownerProcess = Process.GetCurrentProcess())
+		{
+			return ownerProcess.Id.ToString(CultureInfo.InvariantCulture) + ":" + ownerProcess.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture);
+		}
 	}
 
 	private static bool VerifyUpnpMappingVisibility(UpnpMappingAttempt attempt, int externalPort, int internalPort, string protocol, string internalClient, WaitHandle stopped)
@@ -672,6 +852,39 @@ internal static partial class Launcher
 
 
 	private static void DeleteCreatedUpnpMappings(UpnpMappingAttempt attempt)
+	{
+		if (attempt.Generation > 0 && attempt.Generation != Volatile.Read(ref currentUpnpGeneration))
+		{
+			Console.WriteLine("[UPnP] 새 서버 실행이 매핑 소유권을 이어받아 이전 실행의 지연된 정리를 건너뜁니다.");
+			return;
+		}
+		if (attempt.SocketService != null)
+		{
+			bool socketDeleted = false;
+			try
+			{
+				using (CancellationTokenSource cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
+				{
+					int deleted = attempt.SocketService.DeleteMappingsAsync(attempt.SocketCreated, cancellation.Token).GetAwaiter().GetResult();
+					socketDeleted = deleted == attempt.SocketCreated.Count;
+				}
+			}
+			catch (Exception exception)
+			{
+				Console.WriteLine("[UPnP] SSDP/SOAP 매핑 삭제 실패: " + SummarizeUpnpError(exception));
+			}
+			for (int i = 0; i < attempt.Created.Count; i++) MarkTrackedOwnershipInactive(attempt.Created[i].Description, attempt.Created[i].Protocol);
+			string socketStatus = socketDeleted ? "포트 매핑 삭제 완료" : "포트 매핑 삭제 실패";
+			Interlocked.Exchange(ref lastUpnpCleanupStatus, TranslateExternalAccessStatus(socketStatus));
+			ReportExternalAccessStatus(socketStatus, !socketDeleted);
+			return;
+		}
+		Interlocked.Exchange(ref upnpComCleanupInProgress, 1);
+		try { DeleteCreatedComUpnpMappings(attempt); }
+		finally { Interlocked.Exchange(ref upnpComCleanupInProgress, 0); }
+	}
+
+	private static void DeleteCreatedComUpnpMappings(UpnpMappingAttempt attempt)
 	{
 		bool allDeleted = true;
 		for (int i = attempt.Created.Count - 1; i >= 0; i--)
@@ -1075,6 +1288,7 @@ internal static partial class Launcher
 		if (key == "UPnP 장치 검색 중") return "Searching for a UPnP gateway" + suffix;
 		if (key == "UPnP 자동 매핑 중") return "Creating a UPnP port mapping" + suffix;
 		if (key == "UPnP 매핑 성공") return "UPnP mapping succeeded" + suffix;
+		if (key == "UPnP 대체 포트 매핑 성공") return "UPnP mapping succeeded on a fallback external port" + suffix;
 		if (key == "UPnP TCP 매핑만 성공") return "Only the UPnP TCP mapping succeeded" + suffix;
 		if (key == "UPnP 매핑 실패") return "UPnP mapping failed" + suffix;
 		if (key == "외부 접속 재검사 중") return "Rechecking external access" + suffix;
@@ -1126,8 +1340,10 @@ internal static partial class Launcher
 		}
 		ReleaseComObject(attempt.Collection);
 		ReleaseComObject(attempt.NatObject);
+		if (attempt.SocketService != null) attempt.SocketService.Dispose();
 		attempt.Collection = null;
 		attempt.NatObject = null;
+		attempt.SocketService = null;
 	}
 
 	private static void ReleaseComObject(object value)

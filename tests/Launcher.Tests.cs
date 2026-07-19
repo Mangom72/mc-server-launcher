@@ -117,14 +117,15 @@ internal static class LauncherTests
 	private static void TestUpdateMetadataParsing()
 	{
 		string hash = new string('a', 64);
-		string json = "{\"version\":\"0.4.2\",\"build\":\"26.2.45.30\",\"download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/Minecraft-Server-Launcher.exe\",\"primary_download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/MineHarbor.exe\",\"sha256\":\"" + hash + "\",\"size\":2097152,\"release_notes\":\"test\",\"minimum_supported_version\":\"0.1.0\"}";
+		Equal("Mangom72/MineHarbor", Convert.ToString(Invoke("GetLauncherReleaseRepositoryPath", new object[0])), "정식 자동 업데이트 저장소");
+		string json = "{\"version\":\"0.4.2\",\"build\":\"26.2.45.30\",\"download_url\":\"https://github.com/Mangom72/MineHarbor/releases/download/v0.4.2/Minecraft-Server-Launcher.exe\",\"primary_download_url\":\"https://github.com/Mangom72/MineHarbor/releases/download/v0.4.2/MineHarbor.exe\",\"sha256\":\"" + hash + "\",\"size\":2097152,\"release_notes\":\"test\",\"minimum_supported_version\":\"0.1.0\"}";
 		object metadata = Invoke("ParseLauncherUpdateMetadata", new object[] { json });
 		Equal("0.4.2", Convert.ToString(GetField(metadata, "ProductVersion")), "업데이트 제품 버전");
 		Equal("26.2.45.30", Convert.ToString(GetField(metadata, "BuildNumber")), "업데이트 빌드");
-		Equal("https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/MineHarbor.exe", Convert.ToString(GetField(metadata, "Url")), "MineHarbor 기본 업데이트 자산");
-		string legacyJson = json.Replace(",\"primary_download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/MineHarbor.exe\"", string.Empty);
+		Equal("https://github.com/Mangom72/MineHarbor/releases/download/v0.4.2/MineHarbor.exe", Convert.ToString(GetField(metadata, "Url")), "MineHarbor 기본 업데이트 자산");
+		string legacyJson = json.Replace(",\"primary_download_url\":\"https://github.com/Mangom72/MineHarbor/releases/download/v0.4.2/MineHarbor.exe\"", string.Empty);
 		object legacyMetadata = Invoke("ParseLauncherUpdateMetadata", new object[] { legacyJson });
-		Equal("https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/Minecraft-Server-Launcher.exe", Convert.ToString(GetField(legacyMetadata, "Url")), "기존 업데이트 메타데이터 호환");
+		Equal("https://github.com/Mangom72/MineHarbor/releases/download/v0.4.2/Minecraft-Server-Launcher.exe", Convert.ToString(GetField(legacyMetadata, "Url")), "기존 업데이트 메타데이터 호환");
 		Equal(true, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.4.1", "26.2.45.29" }), "새 제품 버전 판별");
 		Equal(false, Invoke("IsLauncherUpdateNewer", new object[] { metadata, "0.4.2", "26.2.45.30" }), "최신 버전 판별");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { "{}" }); }, "누락된 업데이트 메타데이터");
@@ -627,6 +628,8 @@ internal static class LauncherTests
 		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] UPnP 매핑 성공 · 203.0.113.10:25566" });
 		Equal(Convert.ToString(Invoke("ManagedText", new object[] { "온라인", "Online" })), Convert.ToString(GetField(session, "Status")), "외부 접속 복구 상태");
 		Equal("203.0.113.10:25566", Convert.ToString(GetField(session, "Address")), "외부 접속 주소 갱신");
+		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] UPnP 대체 포트 매핑 성공 · 203.0.113.10:25567" });
+		Equal("203.0.113.10:25567", Convert.ToString(GetField(session, "Address")), "UPnP 대체 외부 포트 주소 갱신");
 		Pass();
 	}
 
@@ -678,6 +681,77 @@ internal static class LauncherTests
 			((IList)GetField(mismatchAttempt, "Created")).Add(created);
 			Invoke("DeleteCreatedUpnpMappings", new object[] { mismatchAttempt });
 			Equal(0, mismatchCollection.RemoveCount, "설명이 다른 매핑 삭제 차단");
+
+			using (ManualResetEvent notStopped = new ManualResetEvent(false))
+			{
+				for (int cycle = 0; cycle < 12; cycle++)
+				{
+					object lifecycleAttempt = Activator.CreateInstance(attemptType, true);
+					FakeMappingCollection lifecycleCollection = new FakeMappingCollection(null);
+					SetPublic(lifecycleAttempt, "Collection", lifecycleCollection);
+					string lifecycleDescription = "MH-" + cycle.ToString("D12");
+					Equal(true, Invoke("TryAddSingleUpnpMapping", new object[] { lifecycleAttempt, 25566, 25565, "TCP", "192.168.1.20", lifecycleDescription, notStopped }), "반복 실행 매핑 생성 " + cycle);
+					Invoke("DeleteCreatedUpnpMappings", new object[] { lifecycleAttempt });
+					Equal(0, lifecycleCollection.Count, "반복 실행 매핑 정리 " + cycle);
+				}
+
+				object lostResponseAttempt = Activator.CreateInstance(attemptType, true);
+				FakeMappingCollection lostResponseCollection = new FakeMappingCollection(null, true);
+				SetPublic(lostResponseAttempt, "Collection", lostResponseCollection);
+				Equal(true, Invoke("TryAddSingleUpnpMapping", new object[] { lostResponseAttempt, 25567, 25565, "TCP", "192.168.1.20", "MH-999999999999", notStopped }), "Add 응답 유실 후 현재 매핑 회수");
+				Equal(1, ((IList)GetField(lostResponseAttempt, "Created")).Count, "응답 유실 매핑 소유권 기록");
+				Invoke("DeleteCreatedUpnpMappings", new object[] { lostResponseAttempt });
+				Equal(0, lostResponseCollection.Count, "응답 유실 매핑 종료 정리");
+
+				int[] candidates = (int[])Invoke("GetUpnpExternalPortCandidates", new object[] { 25565 });
+				Equal(9, candidates.Length, "기본 포트와 대체 포트 후보 수");
+				Equal(25565, candidates[0], "기본 외부 포트 우선");
+				object fallbackAttempt = Activator.CreateInstance(attemptType, true);
+				FakeMappingCollection fallbackCollection = new FakeMappingCollection(new FakeMapping(25565, "TCP", 25565, "192.168.1.99", "사용자 매핑"));
+				SetPublic(fallbackAttempt, "Collection", fallbackCollection);
+				Equal(true, Invoke("TryAddTcpUpnpMappingWithFallback", new object[] { fallbackAttempt, candidates, 25565, "192.168.1.20", "MH-888888888888", notStopped }), "충돌 후 COM 대체 외부 포트 사용");
+				Equal(25566, GetField(fallbackAttempt, "ExternalPort"), "선택된 COM 대체 외부 포트");
+				Invoke("DeleteCreatedUpnpMappings", new object[] { fallbackAttempt });
+				Equal(1, fallbackCollection.Count, "기존 사용자 매핑 보존");
+				Equal(true, fallbackCollection[25565, "TCP"] != null, "기본 포트의 사용자 매핑 유지");
+
+				FieldInfo generationField = launcher.GetField("currentUpnpGeneration", BindingFlags.Static | BindingFlags.NonPublic);
+				long oldGenerationValue = Convert.ToInt64(generationField.GetValue(null));
+				try
+				{
+					generationField.SetValue(null, 2L);
+					FakeMappingCollection delayedCollection = new FakeMappingCollection(new FakeMapping(25568, "TCP", 25565, "192.168.1.20", "MH-777777777777"));
+					object delayedAttempt = Activator.CreateInstance(attemptType, true);
+					SetPublic(delayedAttempt, "Collection", delayedCollection);
+					SetPublic(delayedAttempt, "Generation", 1L);
+					object delayedCreated = Activator.CreateInstance(createdType, true);
+					SetPublic(delayedCreated, "ExternalPort", 25568); SetPublic(delayedCreated, "InternalPort", 25565); SetPublic(delayedCreated, "Protocol", "TCP"); SetPublic(delayedCreated, "InternalClient", "192.168.1.20"); SetPublic(delayedCreated, "Description", "MH-777777777777");
+					((IList)GetField(delayedAttempt, "Created")).Add(delayedCreated);
+					Invoke("DeleteCreatedUpnpMappings", new object[] { delayedAttempt });
+					Equal(0, delayedCollection.RemoveCount, "새 실행 이후 이전 실행의 지연 삭제 차단");
+					object currentAttempt = Activator.CreateInstance(attemptType, true);
+					SetPublic(currentAttempt, "Collection", delayedCollection);
+					SetPublic(currentAttempt, "Generation", 2L);
+					((IList)GetField(currentAttempt, "Created")).Add(delayedCreated);
+					Invoke("DeleteCreatedUpnpMappings", new object[] { currentAttempt });
+					Equal(1, delayedCollection.RemoveCount, "현재 실행이 인계받은 매핑 정리");
+				}
+				finally { generationField.SetValue(null, oldGenerationValue); }
+
+				FieldInfo cleanupField = launcher.GetField("upnpComCleanupInProgress", BindingFlags.Static | BindingFlags.NonPublic);
+				int oldCleanupValue = Convert.ToInt32(cleanupField.GetValue(null));
+				try
+				{
+					cleanupField.SetValue(null, 1);
+					Type networkType = launcher.GetNestedType("NetworkDetails", BindingFlags.NonPublic);
+					object network = Activator.CreateInstance(networkType, true);
+					SetPublic(network, "LocalIpv4", "127.0.0.1");
+					object blockedAttempt = Invoke("TryCreateUpnpMappings", new object[] { 25565, network, false, notStopped });
+					Equal(true, Convert.ToString(GetField(blockedAttempt, "Error")).Contains("이전 서버 실행"), "이전 COM 정리 중 새 매핑 차단");
+					Equal(null, GetField(blockedAttempt, "SocketService"), "정리 경합 중 SSDP/SOAP 장치 검색 미실행");
+				}
+				finally { cleanupField.SetValue(null, oldCleanupValue); }
+			}
 		}
 		finally { pathProperty.SetValue(null, oldPath, null); if (File.Exists(dummyFile)) File.Delete(dummyFile); }
 		Pass();
@@ -991,18 +1065,26 @@ internal static class LauncherTests
 
 	public sealed class FakeMappingCollection : IEnumerable
 	{
-		private FakeMapping mapping;
+		private readonly Dictionary<string, FakeMapping> mappings = new Dictionary<string, FakeMapping>(StringComparer.OrdinalIgnoreCase);
 		private bool throwAfterAddOnce;
 		public int RemoveCount { get; private set; }
+		public int AddCount { get; private set; }
+		public int Count { get { return mappings.Count; } }
 		public FakeMappingCollection(FakeMapping value) : this(value, false) { }
-		public FakeMappingCollection(FakeMapping value, bool throwAfterAdd) { mapping = value; throwAfterAddOnce = throwAfterAdd; }
+		public FakeMappingCollection(FakeMapping value, bool throwAfterAdd)
+		{
+			if (value != null) mappings[GetKey(value.ExternalPort, value.Protocol)] = value;
+			throwAfterAddOnce = throwAfterAdd;
+		}
 		public FakeMapping this[int port, string protocol]
 		{
-			get { return mapping != null && mapping.ExternalPort == port && string.Equals(mapping.Protocol, protocol, StringComparison.OrdinalIgnoreCase) ? mapping : null; }
+			get { FakeMapping mapping; return mappings.TryGetValue(GetKey(port, protocol), out mapping) ? mapping : null; }
 		}
 		public object Add(int externalPort, string protocol, int internalPort, string internalClient, bool enabled, string description)
 		{
-			mapping = new FakeMapping(externalPort, protocol, internalPort, internalClient, description);
+			FakeMapping mapping = new FakeMapping(externalPort, protocol, internalPort, internalClient, description);
+			mappings[GetKey(externalPort, protocol)] = mapping;
+			AddCount++;
 			if (throwAfterAddOnce)
 			{
 				throwAfterAddOnce = false;
@@ -1010,10 +1092,177 @@ internal static class LauncherTests
 			}
 			return mapping;
 		}
-		public void Remove(int externalPort, string protocol) { RemoveCount++; mapping = null; }
-		public IEnumerator GetEnumerator() { return new object[] { mapping }.GetEnumerator(); }
+		public void Remove(int externalPort, string protocol) { if (mappings.Remove(GetKey(externalPort, protocol))) RemoveCount++; }
+		public IEnumerator GetEnumerator() { return mappings.Values.GetEnumerator(); }
+		private static string GetKey(int port, string protocol) { return port.ToString() + "/" + protocol; }
 	}
 
+	private sealed class FakeSoapMapping
+	{
+		public int InternalPort;
+		public string InternalClient;
+		public string Description;
+	}
+
+	private sealed class FakeUpnpSoapServer : IDisposable
+	{
+		private readonly TcpListener listener;
+		private readonly Thread worker;
+		private readonly object sync = new object();
+		private readonly Dictionary<string, FakeSoapMapping> mappings = new Dictionary<string, FakeSoapMapping>(StringComparer.OrdinalIgnoreCase);
+		private volatile bool stopping;
+		public bool DropNextAddResponse;
+		public int DelayNextResponseMilliseconds;
+
+		public FakeUpnpSoapServer()
+		{
+			listener = new TcpListener(IPAddress.Loopback, 0);
+			listener.Start();
+			worker = new Thread(Run);
+			worker.IsBackground = true;
+			worker.Start();
+		}
+
+		public string ControlUrl { get { return "http://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port + "/control"; } }
+		public int Count { get { lock (sync) return mappings.Count; } }
+
+		public void Preload(int externalPort, string protocol, int internalPort, string internalClient, string description)
+		{
+			lock (sync) mappings[GetKey(externalPort, protocol)] = new FakeSoapMapping { InternalPort = internalPort, InternalClient = internalClient, Description = description };
+		}
+
+		private void Run()
+		{
+			while (!stopping)
+			{
+				try
+				{
+					using (TcpClient client = listener.AcceptTcpClient()) Handle(client);
+				}
+				catch (SocketException) { if (!stopping) throw; }
+				catch (ObjectDisposedException) { if (!stopping) throw; }
+				catch (Exception ex) { if (!stopping) Console.WriteLine("가짜 UPnP 서버 오류: " + ex.Message); }
+			}
+		}
+
+		private void Handle(TcpClient client)
+		{
+			client.ReceiveTimeout = 5000;
+			client.SendTimeout = 5000;
+			NetworkStream stream = client.GetStream();
+			List<byte> headerBytes = new List<byte>();
+			int matched = 0;
+			while (headerBytes.Count < 65536)
+			{
+				int value = stream.ReadByte();
+				if (value < 0) return;
+				headerBytes.Add((byte)value);
+				byte expected = new byte[] { 13, 10, 13, 10 }[matched];
+				matched = value == expected ? matched + 1 : value == 13 ? 1 : 0;
+				if (matched == 4) break;
+			}
+			string headers = Encoding.ASCII.GetString(headerBytes.ToArray());
+			Match lengthMatch = Regex.Match(headers, @"(?im)^Content-Length:\s*(\d+)\s*$");
+			int contentLength = lengthMatch.Success ? int.Parse(lengthMatch.Groups[1].Value) : 0;
+			if (Regex.IsMatch(headers, @"(?im)^Expect:\s*100-continue\s*$"))
+			{
+				byte[] continueResponse = Encoding.ASCII.GetBytes("HTTP/1.1 100 Continue\r\n\r\n");
+				stream.Write(continueResponse, 0, continueResponse.Length);
+			}
+			byte[] bodyBytes = new byte[contentLength];
+			int offset = 0;
+			while (offset < bodyBytes.Length)
+			{
+				int read = stream.Read(bodyBytes, offset, bodyBytes.Length - offset);
+				if (read <= 0) break;
+				offset += read;
+			}
+			string body = Encoding.UTF8.GetString(bodyBytes, 0, offset);
+			int responseDelay = Interlocked.Exchange(ref DelayNextResponseMilliseconds, 0);
+			if (responseDelay > 0) Thread.Sleep(responseDelay);
+
+			if (body.IndexOf("<u:GetSpecificPortMappingEntry", StringComparison.OrdinalIgnoreCase) >= 0)
+			{
+				int externalPort = int.Parse(ReadTag(body, "NewExternalPort"));
+				string protocol = ReadTag(body, "NewProtocol");
+				FakeSoapMapping mapping;
+				lock (sync) mappings.TryGetValue(GetKey(externalPort, protocol), out mapping);
+				if (mapping == null) { WriteFault(stream, 714); return; }
+				string responseBody = "<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body><u:GetSpecificPortMappingEntryResponse xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:1\"><NewInternalPort>" + mapping.InternalPort + "</NewInternalPort><NewInternalClient>" + Escape(mapping.InternalClient) + "</NewInternalClient><NewEnabled>1</NewEnabled><NewPortMappingDescription>" + Escape(mapping.Description) + "</NewPortMappingDescription><NewLeaseDuration>0</NewLeaseDuration></u:GetSpecificPortMappingEntryResponse></s:Body></s:Envelope>";
+				WriteResponse(stream, 200, "OK", responseBody);
+				return;
+			}
+			if (body.IndexOf("<u:AddPortMapping", StringComparison.OrdinalIgnoreCase) >= 0)
+			{
+				int externalPort = int.Parse(ReadTag(body, "NewExternalPort"));
+				string protocol = ReadTag(body, "NewProtocol");
+				int internalPort = int.Parse(ReadTag(body, "NewInternalPort"));
+				string internalClient = ReadTag(body, "NewInternalClient");
+				string description = ReadTag(body, "NewPortMappingDescription");
+				lock (sync)
+				{
+					FakeSoapMapping existing;
+					if (mappings.TryGetValue(GetKey(externalPort, protocol), out existing) && !string.Equals(existing.InternalClient, internalClient, StringComparison.OrdinalIgnoreCase))
+					{
+						WriteFault(stream, 718);
+						return;
+					}
+					mappings[GetKey(externalPort, protocol)] = new FakeSoapMapping { InternalPort = internalPort, InternalClient = internalClient, Description = description };
+				}
+				if (DropNextAddResponse) { DropNextAddResponse = false; return; }
+				WriteResponse(stream, 200, "OK", "<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body><u:AddPortMappingResponse xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:1\"/></s:Body></s:Envelope>");
+				return;
+			}
+			if (body.IndexOf("<u:DeletePortMapping", StringComparison.OrdinalIgnoreCase) >= 0)
+			{
+				int externalPort = int.Parse(ReadTag(body, "NewExternalPort"));
+				string protocol = ReadTag(body, "NewProtocol");
+				lock (sync) mappings.Remove(GetKey(externalPort, protocol));
+				WriteResponse(stream, 200, "OK", "<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body><u:DeletePortMappingResponse xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:1\"/></s:Body></s:Envelope>");
+				return;
+			}
+			WriteResponse(stream, 404, "Not Found", string.Empty);
+		}
+
+		private static string ReadTag(string xml, string name)
+		{
+			Match match = Regex.Match(xml ?? string.Empty, "<" + name + ">(.*?)</" + name + ">", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+			return match.Success ? WebUtility.HtmlDecode(match.Groups[1].Value) : string.Empty;
+		}
+
+		private static string Escape(string value) { return System.Security.SecurityElement.Escape(value ?? string.Empty); }
+		private static string GetKey(int port, string protocol) { return port.ToString() + "/" + protocol; }
+
+		private static void WriteFault(NetworkStream stream, int errorCode)
+		{
+			string body = "<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body><s:Fault><detail><UPnPError><errorCode>" + errorCode + "</errorCode><errorDescription>Test fault</errorDescription></UPnPError></detail></s:Fault></s:Body></s:Envelope>";
+			WriteResponse(stream, 500, "Internal Server Error", body);
+		}
+
+		private static void WriteResponse(NetworkStream stream, int statusCode, string reason, string body)
+		{
+			byte[] payload = Encoding.UTF8.GetBytes(body ?? string.Empty);
+			byte[] header = Encoding.ASCII.GetBytes("HTTP/1.1 " + statusCode + " " + reason + "\r\nContent-Type: text/xml; charset=utf-8\r\nContent-Length: " + payload.Length + "\r\nConnection: close\r\n\r\n");
+			stream.Write(header, 0, header.Length);
+			if (payload.Length > 0) stream.Write(payload, 0, payload.Length);
+			stream.Flush();
+		}
+
+		public void Dispose()
+		{
+			stopping = true;
+			listener.Stop();
+			worker.Join(3000);
+		}
+	}
+
+	private static object AwaitTaskResult(object taskObject)
+	{
+		Task task = (Task)taskObject;
+		task.GetAwaiter().GetResult();
+		PropertyInfo resultProperty = taskObject.GetType().GetProperty("Result", BindingFlags.Instance | BindingFlags.Public);
+		return resultProperty == null ? null : resultProperty.GetValue(taskObject, null);
+	}
 
     private static void TestSocketUpnpLocalServer()
     {
@@ -1021,7 +1270,75 @@ internal static class LauncherTests
         Type serviceType = launcher.GetNestedType("SocketUpnpPortMappingService", BindingFlags.NonPublic);
         if (serviceType == null) throw new Exception("SocketUpnpPortMappingService not found");
         PropertyInfo implemented = serviceType.GetProperty("MappingImplemented", BindingFlags.NonPublic | BindingFlags.Static);
-        Equal(false, implemented.GetValue(null, null), "미완성 소켓 UPnP가 활성화되지 않음");
+		Equal(true, implemented.GetValue(null, null), "SSDP/SOAP UPnP 백업 방식 활성화");
+
+		Type serviceInfoType = serviceType.GetNestedType("UpnpServiceInfo", BindingFlags.NonPublic | BindingFlags.Public);
+		MethodInfo parseServices = serviceType.GetMethod("ParseUpnpServices", BindingFlags.NonPublic | BindingFlags.Static);
+		string descriptionXml = "<root><device><serviceList><service><serviceType>urn:schemas-upnp-org:service:WANIPConnection:1</serviceType><controlURL>/control</controlURL></service><service><serviceType>urn:schemas-upnp-org:service:WANPPPConnection:1</serviceType><controlURL>/ppp</controlURL></service></serviceList></device></root>";
+		IList parsedServices = (IList)parseServices.Invoke(null, new object[] { descriptionXml, new Uri("http://127.0.0.1:54321/root.xml") });
+		Equal(2, parsedServices.Count, "장치 설명에서 WAN 서비스별 제어 URL 연결");
+
+		Type trackerType = launcher.GetNestedType("UpnpMappingOwnershipTracker", BindingFlags.NonPublic | BindingFlags.Static);
+		PropertyInfo pathProperty = trackerType.GetProperty("TrackerFilePathOverride", BindingFlags.NonPublic | BindingFlags.Static);
+		string oldPath = (string)pathProperty.GetValue(null, null);
+		string dummyFile = Path.Combine(Path.GetTempPath(), "test-socket-upnp-mappings-" + Guid.NewGuid().ToString("N") + ".tsv");
+		pathProperty.SetValue(null, dummyFile, null);
+		object service = null;
+		try
+		{
+			using (FakeUpnpSoapServer server = new FakeUpnpSoapServer())
+			{
+				service = Activator.CreateInstance(serviceType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { null, null, null }, null);
+				object serviceInfo = Activator.CreateInstance(serviceInfoType, true);
+				SetMember(serviceInfo, "ServiceType", "urn:schemas-upnp-org:service:WANIPConnection:1");
+				SetMember(serviceInfo, "ControlUrl", server.ControlUrl);
+				SetMember(serviceInfo, "RouterId", "127.0.0.1");
+				MethodInfo mapOnService = serviceType.GetMethod("MapPortsOnServiceAsync", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+				MethodInfo deleteMappings = serviceType.GetMethod("DeleteMappingsAsync", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+				for (int cycle = 0; cycle < 8; cycle++)
+				{
+					object mappingResult = AwaitTaskResult(mapOnService.Invoke(service, new object[] { serviceInfo, 25600, 25565, "127.0.0.1", true, "MH-" + cycle.ToString("D12"), CancellationToken.None }));
+					Equal(true, GetMember(mappingResult, "Success"), "SSDP/SOAP 반복 매핑 생성 " + cycle);
+					IList created = (IList)GetMember(mappingResult, "CreatedMappings");
+					Equal(2, created.Count, "TCP/UDP 소유 매핑 기록 " + cycle);
+					Equal(2, AwaitTaskResult(deleteMappings.Invoke(service, new object[] { created, CancellationToken.None })), "SSDP/SOAP 반복 종료 정리 " + cycle);
+					Equal(0, server.Count, "반복 종료 후 공유기 매핑 없음 " + cycle);
+				}
+
+				server.DropNextAddResponse = true;
+				object recoveredResult = AwaitTaskResult(mapOnService.Invoke(service, new object[] { serviceInfo, 25601, 25565, "127.0.0.1", false, "MH-555555555555", CancellationToken.None }));
+				Equal(true, GetMember(recoveredResult, "Success"), "SOAP Add 응답 유실 후 조회로 복구");
+				IList recoveredCreated = (IList)GetMember(recoveredResult, "CreatedMappings");
+				Equal(1, recoveredCreated.Count, "응답 유실 매핑 소유권 유지");
+				AwaitTaskResult(deleteMappings.Invoke(service, new object[] { recoveredCreated, CancellationToken.None }));
+
+				server.Preload(25602, "TCP", 25565, "127.0.0.2", "사용자 매핑");
+				MethodInfo mapWithFallback = serviceType.GetMethod("MapPortsOnServiceWithFallbackAsync", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+				object fallbackResult = AwaitTaskResult(mapWithFallback.Invoke(service, new object[] { serviceInfo, new int[] { 25602, 25603 }, 25565, "127.0.0.1", false, "MH-444444444444", CancellationToken.None }));
+				Equal(true, GetMember(fallbackResult, "Success"), "SOAP 충돌 후 대체 외부 포트 생성");
+				Equal(25603, GetMember(fallbackResult, "ExternalPort"), "SOAP 대체 외부 포트 선택");
+				IList fallbackCreated = (IList)GetMember(fallbackResult, "CreatedMappings");
+				AwaitTaskResult(deleteMappings.Invoke(service, new object[] { fallbackCreated, CancellationToken.None }));
+				Equal(1, server.Count, "SOAP 대체 포트 정리 후 사용자 매핑 보존");
+
+				server.DelayNextResponseMilliseconds = 1200;
+				bool canceled = false;
+				using (CancellationTokenSource cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100)))
+				{
+					try { AwaitTaskResult(mapOnService.Invoke(service, new object[] { serviceInfo, 25604, 25565, "127.0.0.1", false, "MH-333333333333", cancellation.Token })); }
+					catch (OperationCanceledException) { canceled = true; }
+				}
+				Equal(true, canceled, "서버 종료 신호로 진행 중인 SOAP 요청 취소");
+				Equal(1, server.Count, "취소 후 사용자 매핑 외 추가 매핑 없음");
+			}
+		}
+		finally
+		{
+			if (service != null) serviceType.GetMethod("Dispose", BindingFlags.Instance | BindingFlags.Public).Invoke(service, null);
+			pathProperty.SetValue(null, oldPath, null);
+			if (File.Exists(dummyFile)) File.Delete(dummyFile);
+		}
         Console.WriteLine("OK");
     }
 }

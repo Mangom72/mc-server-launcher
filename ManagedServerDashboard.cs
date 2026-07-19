@@ -1433,7 +1433,7 @@ internal static partial class Launcher
 		{
 			session.Status = ManagedText("안전 종료 중", "Stopping safely");
 		}
-		Match success = Regex.Match(line, @"\[외부 접속 확인\]\s*성공:\s*외부에서\s+([^\s]+)에\s+접속|\[외부 접속\]\s*(?:기존 포트포워딩 정상|UPnP 매핑 성공)\s*·\s*([^\s]+)", RegexOptions.IgnoreCase);
+		Match success = Regex.Match(line, @"\[외부 접속 확인\]\s*성공:\s*외부에서\s+([^\s]+)에\s+접속|\[외부 접속\]\s*(?:기존 포트포워딩 정상|UPnP 매핑 성공|UPnP 대체 포트 매핑 성공)\s*·\s*([^\s]+)", RegexOptions.IgnoreCase);
 		if (success.Success)
 		{
 			session.Address = success.Groups[1].Success ? success.Groups[1].Value : success.Groups[2].Value;

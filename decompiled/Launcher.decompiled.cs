@@ -256,7 +256,7 @@ internal static partial class Launcher
 
 	private static string GetLauncherReleaseRepositoryPath()
 	{
-		return "Mangom72/mc-server-launcher";
+		return "Mangom72/MineHarbor";
 	}
 
 	[DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
