@@ -52,7 +52,7 @@ internal static partial class Launcher
 			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68F));
 			root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
-			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60F));
+			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 108F));
 			Controls.Add(root);
 
 			Panel header = new Panel();
@@ -78,6 +78,7 @@ internal static partial class Launcher
 			retentionBox.Anchor = AnchorStyles.Top | AnchorStyles.Right;
 			retentionBox.Location = new Point(header.Width - 72, 9);
 			retentionBox.ValueChanged += delegate { WriteBackupRetentionCount(serverDirectory, (int)retentionBox.Value); };
+			ConfigureAccessibleField(retentionBox, korean ? "백업 보존 개수" : "Backup retention count", korean ? "자동으로 유지할 최근 백업 개수를 지정합니다." : "Choose how many recent backups to retain automatically.");
 			header.Controls.Add(retentionBox);
 			header.Resize += delegate
 			{
@@ -91,6 +92,7 @@ internal static partial class Launcher
 			backupList.FullRowSelect = true;
 			backupList.HideSelection = false;
 			backupList.MultiSelect = false;
+			ConfigureAccessibleField(backupList, korean ? "백업 목록" : "Backup list", korean ? "백업 시각, 크기와 무결성 상태를 확인하고 작업할 백업을 선택합니다." : "Review backup time, size, and integrity status, then select a backup.");
 			backupList.Columns.Add(korean ? "백업" : "Backup", 330);
 			backupList.Columns.Add(korean ? "만든 시각" : "Created", 180);
 			backupList.Columns.Add(korean ? "크기" : "Size", 110);
@@ -107,7 +109,7 @@ internal static partial class Launcher
 			FlowLayoutPanel actions = new FlowLayoutPanel();
 			actions.Dock = DockStyle.Fill;
 			actions.FlowDirection = FlowDirection.LeftToRight;
-			actions.WrapContents = false;
+			actions.WrapContents = true;
 			actions.Padding = new Padding(0, 7, 0, 0);
 			root.Controls.Add(actions, 0, 3);
 			createButton = NewBackupButton(korean ? "새 백업" : "Create backup", 112, "primary");
@@ -139,6 +141,7 @@ internal static partial class Launcher
 				Process.Start(new ProcessStartInfo(directory) { UseShellExecute = true });
 			};
 			actions.Controls.Add(openFolder);
+			foreach (Control control in actions.Controls) EnsureButtonContentFits(control as Button);
 
 			Shown += delegate { ReloadBackups(); };
 			ApplySimpleDialogTheme(this);
@@ -347,6 +350,7 @@ internal static partial class Launcher
 			MinimumSize = new Size(780, 520);
 			Size = new Size(860, 590);
 			Font = new Font("Pretendard", 11F);
+			AutoScaleMode = AutoScaleMode.Dpi;
 
 			TableLayoutPanel root = new TableLayoutPanel();
 			root.Dock = DockStyle.Fill;
@@ -356,7 +360,7 @@ internal static partial class Launcher
 			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 106F));
 			root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
-			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));
+			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 108F));
 			Controls.Add(root);
 
 			Label heading = new Label();
@@ -371,6 +375,7 @@ internal static partial class Launcher
 			profileList.FullRowSelect = true;
 			profileList.HideSelection = false;
 			profileList.MultiSelect = false;
+			ConfigureAccessibleField(profileList, korean ? "서버 프로필 목록" : "Server profile list", korean ? "서버 종류, 버전, 포트와 폴더를 확인하고 관리할 프로필을 선택합니다." : "Review server type, version, port, and folder, then select a profile to manage.");
 			profileList.Columns.Add(korean ? "프로필" : "Profile", 220);
 			profileList.Columns.Add(korean ? "종류" : "Type", 110);
 			profileList.Columns.Add("Minecraft", 110);

@@ -225,6 +225,7 @@ internal static partial class Launcher
 			MinimumSize = new Size(760, 500);
 			Size = new Size(860, 580);
 			Font = new Font("Pretendard", 11F);
+			AutoScaleMode = AutoScaleMode.Dpi;
 			TableLayoutPanel root = new TableLayoutPanel();
 			root.Dock = DockStyle.Fill;
 			root.Padding = new Padding(24);
@@ -246,6 +247,7 @@ internal static partial class Launcher
 			trashList.FullRowSelect = true;
 			trashList.HideSelection = false;
 			trashList.MultiSelect = false;
+			ConfigureAccessibleField(trashList, korean ? "삭제된 서버 목록" : "Deleted server list", korean ? "복구하거나 영구 삭제할 서버와 남은 보관 기간을 확인합니다." : "Review servers available to restore or permanently delete and their remaining retention time.");
 			trashList.Columns.Add(korean ? "서버" : "Server", 220);
 			trashList.Columns.Add(korean ? "삭제 시각" : "Deleted", 180);
 			trashList.Columns.Add(korean ? "자동 삭제" : "Auto-delete", 180);
@@ -255,6 +257,8 @@ internal static partial class Launcher
 			statusLabel = new Label();
 			statusLabel.Dock = DockStyle.Fill;
 			statusLabel.TextAlign = ContentAlignment.MiddleLeft;
+			statusLabel.AccessibleName = korean ? "휴지통 상태" : "Trash status";
+			statusLabel.AccessibleRole = AccessibleRole.StatusBar;
 			root.Controls.Add(statusLabel, 0, 2);
 			FlowLayoutPanel actions = new FlowLayoutPanel();
 			actions.Dock = DockStyle.Fill;

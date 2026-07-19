@@ -862,12 +862,14 @@ internal static partial class Launcher
 		{
 			BridgeReleaseInfo local = new BridgeReleaseInfo(); local.Version = BuildVersionInfo.ProductVersion; local.Protocol = CommandBridgeProtocolVersion; local.MinimumMinecraft = "1.13"; local.MaximumMinecraft = "26.2"; local.Url = new Uri(Path.GetFullPath(BridgeArtifactOverridePath)).AbsoluteUri; local.Size = new FileInfo(BridgeArtifactOverridePath).Length; local.Sha256 = GetFileSha256(BridgeArtifactOverridePath); return local;
 		}
-		string json = DownloadTextWithUserAgent(GetLauncherUpdateMetadataUrl(), "MineHarbor/0.4");
+		string json = DownloadTextWithUserAgent(GetLauncherUpdateMetadataUrl(), "MineHarbor/0.4", GetGitHubReleaseDownloadHosts(), LauncherUpdateMaximumMetadataCharacters);
 		Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string, object>;
 		Dictionary<string, object> bridge = root != null && root.ContainsKey("bridge") ? root["bridge"] as Dictionary<string, object> : null;
 		if (bridge == null) throw new InvalidDataException("업데이트 정보에 명령 브리지 자산이 없습니다.");
 		BridgeReleaseInfo info = new BridgeReleaseInfo(); info.Version = Convert.ToString(bridge["version"], CultureInfo.InvariantCulture); info.Protocol = Convert.ToInt32(bridge["protocol"], CultureInfo.InvariantCulture); info.MinimumMinecraft = Convert.ToString(bridge["minimum_minecraft"], CultureInfo.InvariantCulture); info.MaximumMinecraft = Convert.ToString(bridge["maximum_minecraft"], CultureInfo.InvariantCulture); info.Url = Convert.ToString(bridge["download_url"], CultureInfo.InvariantCulture); info.Sha256 = Convert.ToString(bridge["sha256"], CultureInfo.InvariantCulture); info.Size = Convert.ToInt64(bridge["size"], CultureInfo.InvariantCulture);
-		if (info.Protocol != CommandBridgeProtocolVersion || info.Size < 1024 || info.Sha256.Length != 64 || !IsAllowedBridgeDownloadUrl(info.Url)) throw new InvalidDataException("명령 브리지 메타데이터를 검증하지 못했습니다.");
+		string releaseVersion = root != null && root.ContainsKey("version") ? Convert.ToString(root["version"], CultureInfo.InvariantCulture) : string.Empty;
+		Version parsedBridgeVersion;
+		if (info.Protocol != CommandBridgeProtocolVersion || info.Size < 1024 || info.Size > 536870912L || !IsValidSha256(info.Sha256) || !TryParseProductVersion(info.Version, out parsedBridgeVersion) || !string.Equals(releaseVersion, info.Version, StringComparison.Ordinal) || !IsAllowedBridgeDownloadUrl(info.Url, info.Version)) throw new InvalidDataException("명령 브리지 메타데이터를 검증하지 못했습니다.");
 		return info;
 	}
 
@@ -882,7 +884,7 @@ internal static partial class Launcher
 		Directory.CreateDirectory(Path.GetDirectoryName(destination)); string temporary = destination + ".다운로드중"; string backup = destination + ".이전"; DeleteFileIfPresent(temporary); DeleteFileIfPresent(backup);
 		try
 		{
-			if (!string.IsNullOrEmpty(BridgeArtifactOverridePath) && File.Exists(BridgeArtifactOverridePath)) File.Copy(BridgeArtifactOverridePath, temporary, true); else DownloadFileWithUserAgent(release.Url, temporary, "MineHarbor/0.4");
+			if (!string.IsNullOrEmpty(BridgeArtifactOverridePath) && File.Exists(BridgeArtifactOverridePath)) File.Copy(BridgeArtifactOverridePath, temporary, true); else DownloadFileWithUserAgent(release.Url, temporary, "MineHarbor/0.4", GetGitHubReleaseDownloadHosts());
 			if (!ValidateCommandBridgeArtifact(temporary, release.Size, release.Sha256)) throw new InvalidDataException("명령 브리지 JAR 크기 또는 SHA-256 검증에 실패했습니다.");
 			if (File.Exists(destination)) File.Copy(destination, backup, true);
 			if (BridgeInstallFailureAfterBackup) throw new IOException("브리지 업데이트 복구 테스트 오류");
@@ -931,10 +933,19 @@ internal static partial class Launcher
 		try { using (ZipArchive archive = ZipFile.OpenRead(path)) return archive.GetEntry("plugin.yml") != null && archive.Entries.Any(delegate(ZipArchiveEntry entry) { return entry.FullName.EndsWith("CommandBridgePlugin.class", StringComparison.Ordinal); }); } catch { return false; }
 	}
 
-	private static bool IsAllowedBridgeDownloadUrl(string url)
+	private static bool IsAllowedBridgeDownloadUrl(string url, string version)
 	{
-		Uri uri; if (!Uri.TryCreate(url, UriKind.Absolute, out uri) || uri.Scheme != Uri.UriSchemeHttps) return false;
-		return uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) || uri.Host.Equals("objects.githubusercontent.com", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase);
+		Version parsedVersion;
+		Uri uri;
+		if (!TryParseProductVersion(version, out parsedVersion) || !Uri.TryCreate(url, UriKind.Absolute, out uri) || uri.Scheme != Uri.UriSchemeHttps || !uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment)) return false;
+		string fileName = "MineHarbor-Command-Bridge-Paper-v" + version + ".jar";
+		string[] repositories = new string[] { GetLauncherReleaseRepositoryPath(), "Mangom72/mc-server-launcher" };
+		for (int i = 0; i < repositories.Length; i++)
+		{
+			string prefix = "/" + repositories[i] + "/releases/download/v" + version + "/";
+			if (uri.AbsolutePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && uri.AbsolutePath.EndsWith("/" + fileName, StringComparison.OrdinalIgnoreCase)) return true;
+		}
+		return false;
 	}
 
 	private static bool IsSuggestionGenerationCurrent(int expected, int current) { return expected == current; }

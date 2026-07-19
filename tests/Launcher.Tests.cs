@@ -38,6 +38,7 @@ internal static class LauncherTests
 			TestDataLocations(temporary);
 			TestSetupLayoutAndValidation();
 			TestUxAccessibility();
+			TestSecondaryDialogScaling(temporary);
 			TestPlayerButtonLifecycle();
 			TestModelessToolWindows();
 			TestJavaSelection();
@@ -72,6 +73,8 @@ internal static class LauncherTests
 		finally
 		{
 			SetStaticField("StorageSettingsPathOverride", null);
+			SetStaticField("LauncherUserDataDirectoryOverride", null);
+			SetStaticField("LauncherMutexNameOverride", null);
 			SetStaticField("LauncherUpdatePreferencesPathOverride", null);
 			SetStaticField("BridgeArtifactOverridePath", null);
 			SetStaticField("BridgeInstallFailureAfterBackup", false);
@@ -118,13 +121,17 @@ internal static class LauncherTests
 	{
 		string hash = new string('a', 64);
 		Equal("Mangom72/MineHarbor", Convert.ToString(Invoke("GetLauncherReleaseRepositoryPath", new object[0])), "정식 자동 업데이트 저장소");
-		string json = "{\"version\":\"0.4.2\",\"build\":\"26.2.45.30\",\"download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/Minecraft-Server-Launcher.exe\",\"primary_download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/MineHarbor.exe\",\"sha256\":\"" + hash + "\",\"size\":2097152,\"release_notes\":\"test\",\"minimum_supported_version\":\"0.1.0\"}";
+		string json = "{\"version\":\"0.4.2\",\"build\":\"26.2.45.30\",\"download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/Minecraft-Server-Launcher.exe\",\"primary_download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/MineHarbor.exe\",\"sha256\":\"" + hash + "\",\"size\":2097152,\"release_notes\":\"한국어 변경 사항\",\"release_notes_en\":\"English release notes\",\"minimum_supported_version\":\"0.1.0\"}";
 		object metadata = Invoke("ParseLauncherUpdateMetadata", new object[] { json });
 		Equal("0.4.2", Convert.ToString(GetField(metadata, "ProductVersion")), "업데이트 제품 버전");
 		Equal("26.2.45.30", Convert.ToString(GetField(metadata, "BuildNumber")), "업데이트 빌드");
 		Equal("https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/MineHarbor.exe", Convert.ToString(GetField(metadata, "Url")), "기존 버전 호환 업데이트 자산");
+		Equal("한국어 변경 사항", Convert.ToString(Invoke("SelectLauncherReleaseNotes", new object[] { metadata, true })), "한국어 업데이트 변경 사항 선택");
+		Equal("English release notes", Convert.ToString(Invoke("SelectLauncherReleaseNotes", new object[] { metadata, false })), "영어 업데이트 변경 사항 선택");
 		string canonicalJson = json.Replace("Mangom72/mc-server-launcher", "Mangom72/MineHarbor");
 		Equal("https://github.com/Mangom72/MineHarbor/releases/download/v0.4.2/MineHarbor.exe", Convert.ToString(GetField(Invoke("ParseLauncherUpdateMetadata", new object[] { canonicalJson }), "Url")), "정식 저장소 업데이트 자산");
+		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { canonicalJson.Replace("/download/v0.4.2/", "/download/v0.4.1/") }); }, "업데이트 버전과 다른 릴리스 태그 차단");
+		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { canonicalJson.Replace("MineHarbor.exe\"", "MineHarbor.exe?source=test\"") }); }, "쿼리가 붙은 업데이트 자산 차단");
 		string legacyJson = json.Replace(",\"primary_download_url\":\"https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/MineHarbor.exe\"", string.Empty);
 		object legacyMetadata = Invoke("ParseLauncherUpdateMetadata", new object[] { legacyJson });
 		Equal("https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/Minecraft-Server-Launcher.exe", Convert.ToString(GetField(legacyMetadata, "Url")), "기존 업데이트 메타데이터 호환");
@@ -137,6 +144,14 @@ internal static class LauncherTests
 		Equal("0.4.2", Convert.ToString(GetField(Invoke("ParseLauncherUpdateMetadata", new object[] { compactJson }), "ProductVersion")), "경량 런처 업데이트 허용");
 		Equal("0.4.2", Convert.ToString(GetField(Invoke("ParseLauncherUpdateMetadata", new object[] { json.Replace("2097152", "1") }), "ProductVersion")), "최소 업데이트 파일 크기 제한 없음");
 		ExpectFailure(delegate { Invoke("ParseLauncherUpdateMetadata", new object[] { json.Replace("2097152", "0") }); }, "빈 런처 업데이트 차단");
+		string[] githubHosts = (string[])Invoke("GetGitHubReleaseDownloadHosts", new object[0]);
+		Equal(true, Invoke("IsAllowedDownloadHost", new object[] { "https://release-assets.githubusercontent.com/github-production-release-asset/file", githubHosts }), "GitHub 릴리스 CDN 리디렉션 허용");
+		Equal(false, Invoke("IsAllowedDownloadHost", new object[] { "https://githubusercontent.com.evil.example/file", githubHosts }), "위장 GitHub 릴리스 호스트 차단");
+		Equal(true, Invoke("IsAllowedBridgeDownloadUrl", new object[] { "https://github.com/Mangom72/MineHarbor/releases/download/v0.4.2/MineHarbor-Command-Bridge-Paper-v0.4.2.jar", "0.4.2" }), "정식 명령 브리지 자산 주소");
+		Equal(true, Invoke("IsAllowedBridgeDownloadUrl", new object[] { "https://github.com/Mangom72/mc-server-launcher/releases/download/v0.4.2/MineHarbor-Command-Bridge-Paper-v0.4.2.jar", "0.4.2" }), "이전 저장소 명령 브리지 자산 주소");
+		Equal(false, Invoke("IsAllowedBridgeDownloadUrl", new object[] { "https://github.com/attacker/MineHarbor/releases/download/v0.4.2/MineHarbor-Command-Bridge-Paper-v0.4.2.jar", "0.4.2" }), "다른 저장소 명령 브리지 자산 차단");
+		Equal(false, Invoke("IsAllowedBridgeDownloadUrl", new object[] { "https://github.com/Mangom72/MineHarbor/releases/download/v0.4.2/MineHarbor-Command-Bridge-Paper-v9.9.9.jar", "0.4.2" }), "다른 버전 명령 브리지 자산 차단");
+		Equal(false, Invoke("IsAllowedBridgeDownloadUrl", new object[] { "https://github.com/Mangom72/MineHarbor/releases/download/v0.4.1/MineHarbor-Command-Bridge-Paper-v0.4.2.jar", "0.4.2" }), "다른 태그 명령 브리지 자산 차단");
 		Pass();
 	}
 
@@ -188,6 +203,9 @@ internal static class LauncherTests
 
 	private static void TestMockedDownload(string root)
 	{
+		SetStaticField("LauncherUpdateDownloadHostOverride", "127.0.0.1");
+		try
+		{
 		byte[] payload = Encoding.UTF8.GetBytes("verified mocked launcher download");
 		string completeUrl = StartSingleResponseServer(payload, payload.Length);
 		object asset = CreateReleaseAsset(completeUrl, payload.Length);
@@ -199,6 +217,11 @@ internal static class LauncherTests
 		object interruptedAsset = CreateReleaseAsset(interruptedUrl, payload.Length + 20);
 		string interrupted = Path.Combine(root, "interrupted.download");
 		ExpectFailure(delegate { Invoke("DownloadLauncherUpdate", new object[] { interruptedAsset, interrupted }); }, "중단된 다운로드");
+		}
+		finally
+		{
+			SetStaticField("LauncherUpdateDownloadHostOverride", null);
+		}
 		Pass();
 	}
 
@@ -292,6 +315,10 @@ internal static class LauncherTests
 	{
 		string settingsPath = Path.Combine(root, "storage.properties");
 		SetStaticField("StorageSettingsPathOverride", settingsPath);
+		string isolatedUserData = Path.Combine(root, "isolated-user-data");
+		SetStaticField("LauncherUserDataDirectoryOverride", isolatedUserData);
+		Equal(Path.GetFullPath(isolatedUserData), Invoke("GetLauncherUserDataDirectory", new object[0]), "사용자 데이터 테스트 격리");
+		SetStaticField("LauncherMutexNameOverride", "Local\\MineHarbor.UiAudit." + Guid.NewGuid().ToString("N"));
 		string custom = Path.Combine(root, "custom-data");
 		object[] validate = { custom, null, null };
 		Equal(true, Invoke("TryValidateDataRoot", validate), "사용자 지정 경로");
@@ -486,6 +513,56 @@ internal static class LauncherTests
 			}
 		}
 		languageField.SetValue(null, originalLanguage);
+		Pass();
+	}
+
+	private static void TestSecondaryDialogScaling(string root)
+	{
+		Type profileType = launcher.GetNestedType("ProfileManagerForm", BindingFlags.NonPublic);
+		using (Form profile = (Form)Activator.CreateInstance(profileType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { root }, null))
+		{
+			Equal(AutoScaleMode.Dpi, profile.AutoScaleMode, "프로필 관리 DPI 배율");
+			TableLayoutPanel layout = profile.Controls[0] as TableLayoutPanel;
+			if (layout == null || layout.RowStyles[3].Height < 100F) throw new InvalidOperationException("프로필 관리 작업 버튼의 두 줄 공간이 없습니다.");
+			ListView profileList = (ListView)GetPrivateField(profileType, profile, "profileList");
+			if (string.IsNullOrEmpty(profileList.AccessibleName)) throw new InvalidOperationException("프로필 목록의 접근성 이름이 없습니다.");
+		}
+
+		Type backupType = launcher.GetNestedType("BackupManagerForm", BindingFlags.NonPublic);
+		using (Form backup = (Form)Activator.CreateInstance(backupType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { root }, null))
+		{
+			Equal(AutoScaleMode.Dpi, backup.AutoScaleMode, "백업 관리 DPI 배율");
+			TableLayoutPanel layout = backup.Controls[0] as TableLayoutPanel;
+			if (layout == null || layout.RowStyles[3].Height < 100F) throw new InvalidOperationException("백업 관리 작업 버튼의 줄바꿈 공간이 없습니다.");
+			ListView backupList = (ListView)GetPrivateField(backupType, backup, "backupList");
+			if (string.IsNullOrEmpty(backupList.AccessibleName)) throw new InvalidOperationException("백업 목록의 접근성 이름이 없습니다.");
+		}
+
+		Type trashType = launcher.GetNestedType("ServerTrashForm", BindingFlags.NonPublic);
+		using (Form trash = (Form)Activator.CreateInstance(trashType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { root }, null))
+		{
+			Equal(AutoScaleMode.Dpi, trash.AutoScaleMode, "서버 휴지통 DPI 배율");
+			ListView trashList = (ListView)GetPrivateField(trashType, trash, "trashList");
+			if (string.IsNullOrEmpty(trashList.AccessibleName)) throw new InvalidOperationException("휴지통 목록의 접근성 이름이 없습니다.");
+		}
+
+		Type editorType = launcher.GetNestedType("QuickCommandEditorForm", BindingFlags.NonPublic);
+		using (Form editor = (Form)Activator.CreateInstance(editorType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { null }, null))
+		{
+			Equal(AutoScaleMode.Dpi, editor.AutoScaleMode, "사용자 명령 편집 DPI 배율");
+			TextBox nameBox = (TextBox)GetPrivateField(editorType, editor, "nameBox");
+			if (string.IsNullOrEmpty(nameBox.AccessibleName)) throw new InvalidOperationException("사용자 명령 이름 입력의 접근성 이름이 없습니다.");
+		}
+
+		Type consentType = launcher.GetNestedType("CommandBridgeConsentForm", BindingFlags.NonPublic);
+		using (Form consent = (Form)Activator.CreateInstance(consentType, true))
+		{
+			Equal(AutoScaleMode.Dpi, consent.AutoScaleMode, "명령 브리지 동의 DPI 배율");
+			foreach (Control control in consent.Controls)
+			{
+				if (control.Right > consent.ClientSize.Width) throw new InvalidOperationException("명령 브리지 동의 문구가 창 경계를 벗어납니다: " + control.Text);
+			}
+		}
 		Pass();
 	}
 

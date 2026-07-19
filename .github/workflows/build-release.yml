@@ -24,11 +24,20 @@ jobs:
       INNO_DIR: ${{ github.workspace }}\.build\InnoSetup
       INNO_URL: https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe
       INNO_SHA256: 9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732
-      SIGNING_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Detect signing configuration
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+        run: |
+          $enabled = ![string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64)
+          "SIGNING_ENABLED=$($enabled.ToString().ToLowerInvariant())" >> $env:GITHUB_ENV
 
       - name: Read version
         id: version
@@ -55,15 +64,16 @@ jobs:
         run: .\test.ps1 -LauncherPath (Join-Path $env:ARTIFACTS 'MineHarbor.exe')
 
       - name: Optionally sign Portable EXE
-        if: ${{ env.SIGNING_CERTIFICATE != '' }}
+        if: ${{ env.SIGNING_ENABLED == 'true' }}
         shell: pwsh
         env:
-          WINDOWS_CERTIFICATE_BASE64: ${{ env.SIGNING_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -Match '\\x64\\' | Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($signtool)) { throw 'SignTool was not found.' }
           & $signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $pfx /p $env:WINDOWS_CERTIFICATE_PASSWORD (Join-Path $env:ARTIFACTS 'MineHarbor.exe')
           if ($LASTEXITCODE -ne 0) { throw 'Portable signing failed.' }
 
@@ -83,18 +93,24 @@ jobs:
         run: .\build.ps1 -OutputDirectory $env:ARTIFACTS -SkipCompile -BuildInstaller -InnoCompiler (Join-Path $env:INNO_DIR 'ISCC.exe')
 
       - name: Optionally sign installer
-        if: ${{ env.SIGNING_CERTIFICATE != '' }}
+        if: ${{ env.SIGNING_ENABLED == 'true' }}
         shell: pwsh
         env:
-          WINDOWS_CERTIFICATE_BASE64: ${{ env.SIGNING_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
           if (!(Test-Path $pfx)) { [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)) }
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -Match '\\x64\\' | Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($signtool)) { throw 'SignTool was not found.' }
           $setup = Join-Path $env:ARTIFACTS 'MineHarbor-Setup-v${{ steps.version.outputs.product }}.exe'
           & $signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $pfx /p $env:WINDOWS_CERTIFICATE_PASSWORD $setup
           if ($LASTEXITCODE -ne 0) { throw 'Installer signing failed.' }
+
+      - name: Remove temporary signing certificate
+        if: ${{ always() && env.SIGNING_ENABLED == 'true' }}
+        shell: pwsh
+        run: Remove-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'codesign.pfx') -Force -ErrorAction SilentlyContinue
 
       - name: Generate hashes and update metadata
         id: release
@@ -108,9 +124,10 @@ jobs:
         run: .\scripts\Test-ReleaseArtifacts.ps1 -ArtifactsDirectory $env:ARTIFACTS
 
       - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mineharbor-v${{ steps.version.outputs.product }}
+          if-no-files-found: error
           path: |
             ${{ env.ARTIFACTS }}\MineHarbor.exe
             ${{ env.ARTIFACTS }}\Minecraft-Server-Launcher.exe
