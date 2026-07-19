@@ -51,4 +51,14 @@ $launcherSource = Get-Content -LiteralPath (Join-Path $projectRoot 'decompiled\L
 if ($launcherSource -notmatch 'Forge Installer의 SHA-256 검증에 실패했습니다' -or $launcherSource -notmatch 'AllowAutoRedirect\s*=\s*false') {
     throw 'Forge 다운로드 해시 또는 리디렉션 검증이 누락되었습니다.'
 }
+$releaseWorkflow = Get-Content -LiteralPath (Join-Path $projectRoot '.github\workflows\build-release.yml') -Raw
+if ($releaseWorkflow -match 'uses:\s*[^\r\n]+@v\d') { throw 'GitHub Actions가 변경 가능한 버전 태그를 사용합니다.' }
+if ($releaseWorkflow -notmatch 'persist-credentials:\s*false') { throw '체크아웃 자격 증명 유지 차단이 누락되었습니다.' }
+if ($releaseWorkflow -match '(?m)^\s{2}SIGNING_CERTIFICATE:\s*\$\{\{\s*secrets\.') {
+    throw '서명 인증서가 작업 전체 환경 변수로 노출됩니다.'
+}
+$bumpScript = Get-Content -LiteralPath (Join-Path $projectRoot 'scripts\bump-version.ps1') -Raw
+if ($bumpScript -notmatch 'WriteAllText' -or $bumpScript -notmatch '하나만 지정') {
+    throw '버전 갱신의 UTF-8 저장 또는 모드 상호 배타 검증이 누락되었습니다.'
+}
 Write-Host 'SECURITY_REGRESSION_SCAN_OK'

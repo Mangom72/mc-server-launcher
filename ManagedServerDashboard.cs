@@ -249,7 +249,7 @@ internal static partial class Launcher
 			refreshTimer.Start();
 			Shown += delegate { ReloadProfiles(); };
 			FormClosing += OnDashboardClosing;
-			FormClosed += delegate { refreshTimer.Stop(); };
+			FormClosed += delegate { refreshTimer.Stop(); refreshTimer.Dispose(); serverListToolTip.Dispose(); };
 			ApplySimpleDialogTheme(this);
 			ConfigureAccessibleField(serverList, korean ? "서버 목록" : "Server list", korean ? "상태, 버전, 포트와 접속 주소를 확인하고 서버를 선택합니다." : "Review status, version, port, and address, then select a server.");
 			ApplyCommonButtonToolTips(this);
@@ -834,7 +834,7 @@ internal static partial class Launcher
 								catch (Exception ex) { Console.WriteLine("[Managed] 프로세스 강제 종료 실패: " + ex.Message); }
 							}
 						}
-						// Job Object에 의해 자식 프로세스들이 강제 처형되고 파일 시스템 락이 해제될 시간 보장
+						// Job Object가 자식 프로세스를 종료하고 파일 시스템 잠금을 해제할 시간을 둡니다.
 						System.Threading.Thread.Sleep(1500);
 					});
 				}
@@ -1133,24 +1133,27 @@ internal static partial class Launcher
 			session = managedSession;
 			Text = session.Profile.Name + " · " + ManagedText("콘솔", "Console");
 			StartPosition = FormStartPosition.CenterParent;
-			MinimumSize = new Size(760, 500);
-			Size = new Size(900, 650);
-			Font = new Font("Pretendard", 11F);
+			MinimumSize = new Size(760, 500);
+			Size = new Size(900, 650);
+			Font = new Font("Pretendard", 11F);
+			AutoScaleMode = AutoScaleMode.Dpi;
 
 			Panel toolbar = new Panel();
 			toolbar.Dock = DockStyle.Top;
 			toolbar.Height = 44;
 			toolbar.Padding = new Padding(8, 7, 8, 5);
 			Controls.Add(toolbar);
-			searchBox = new TextBox();
-			searchBox.Dock = DockStyle.Fill;
-			searchBox.TextChanged += delegate { RenderConsole(); };
+			searchBox = new TextBox();
+			searchBox.Dock = DockStyle.Fill;
+			ConfigureAccessibleField(searchBox, ManagedText("콘솔 검색", "Console search"), ManagedText("표시된 콘솔 줄을 검색어로 필터링합니다.", "Filter visible console lines by search text."));
+			searchBox.TextChanged += delegate { RenderConsole(); };
 			toolbar.Controls.Add(searchBox);
 			filterBox = new ModernComboBox();
 			filterBox.DropDownStyle = ComboBoxStyle.DropDownList;
 			filterBox.Width = 144;
 			filterBox.Dock = DockStyle.Right;
-			filterBox.Items.AddRange(new object[4] { ManagedText("전체", "All"), ManagedText("일반 경고", "Warnings"), ManagedText("호환성", "Compatibility"), ManagedText("오류", "Errors") });
+			filterBox.Items.AddRange(new object[4] { ManagedText("전체", "All"), ManagedText("일반 경고", "Warnings"), ManagedText("호환성", "Compatibility"), ManagedText("오류", "Errors") });
+			ConfigureAccessibleField(filterBox, ManagedText("콘솔 필터", "Console filter"), ManagedText("전체, 경고, 호환성 또는 오류 줄만 표시합니다.", "Show all, warning, compatibility, or error lines."));
 			filterBox.SelectedIndex = 0;
 			filterBox.SelectedIndexChanged += delegate { RenderConsole(); };
 			toolbar.Controls.Add(filterBox);
@@ -1160,16 +1163,18 @@ internal static partial class Launcher
 			outputBox.ReadOnly = true;
 			outputBox.Font = new Font("Consolas", 9F);
 			outputBox.WordWrap = false;
-			outputBox.DetectUrls = true;
-			Controls.Add(outputBox);
+			outputBox.DetectUrls = true;
+			ConfigureAccessibleField(outputBox, ManagedText("서버 콘솔 출력", "Server console output"), ManagedText("선택한 서버가 출력한 로그를 읽기 전용으로 표시합니다.", "Displays read-only log output from the selected server."));
+			Controls.Add(outputBox);
 
 			Panel commandPanel = new Panel();
 			commandPanel.Dock = DockStyle.Bottom;
 			commandPanel.Height = 48;
 			commandPanel.Padding = new Padding(8);
 			Controls.Add(commandPanel);
-			commandBox = new TextBox();
-			commandBox.Dock = DockStyle.Fill;
+			commandBox = new TextBox();
+			commandBox.Dock = DockStyle.Fill;
+			ConfigureAccessibleField(commandBox, ManagedText("서버 명령", "Server command"), ManagedText("실행 중인 서버에 보낼 명령을 입력합니다.", "Enter a command to send to the running server."));
 			commandBox.KeyDown += delegate(object sender, KeyEventArgs eventArgs)
 			{
 				if (eventArgs.KeyCode == Keys.Enter)
@@ -1189,7 +1194,7 @@ internal static partial class Launcher
 			timer.Interval = 500;
 			timer.Tick += delegate { RenderConsoleIfChanged(); };
 			timer.Start();
-			FormClosed += delegate { timer.Stop(); };
+			FormClosed += delegate { timer.Stop(); timer.Dispose(); };
 			Shown += delegate { RenderConsole(); };
 			ApplySimpleDialogTheme(this);
 			ApplyCommonButtonToolTips(this);

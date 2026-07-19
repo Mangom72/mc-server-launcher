@@ -207,7 +207,10 @@ internal static partial class Launcher
 
 	private const string AdminPluginJarSha256 = "627bba2a51ae1e7e77acde106d06ff4293a67a5811ddf25f9b072500dd649b67";
 
-	private const string MutexName = "Local\\MineHarbor.MinecraftServerLauncher";
+	private const string MutexName = "Local\\MineHarbor.MinecraftServerLauncher";
+
+	// UI 자동 검증이 실행 중인 사용자 런처와 충돌하지 않도록 뮤텍스 이름만 교체합니다.
+	private static string LauncherMutexNameOverride = null;
 
 	private const string PaperDownloadPage = "https://papermc.io/downloads/paper";
 
@@ -229,8 +232,11 @@ internal static partial class Launcher
 
 	private const string LauncherUpdatePreferencesFileName = "launcher-update-preferences.properties";
 
-	// 테스트가 실제 사용자 업데이트 설정을 건드리지 않도록 경로만 교체하는 내부 지점입니다.
-	private static string LauncherUpdatePreferencesPathOverride = null;
+	// 테스트가 실제 사용자 업데이트 설정을 건드리지 않도록 경로만 교체하는 내부 지점입니다.
+	private static string LauncherUpdatePreferencesPathOverride = null;
+
+	// 로컬 모의 서버 회귀 테스트에서만 HTTP 루프백을 허용합니다.
+	private static string LauncherUpdateDownloadHostOverride = null;
 
 	private const string LegacyLauncherReleaseAssetName = "Minecraft-Server-Launcher.exe";
 
@@ -240,7 +246,9 @@ internal static partial class Launcher
 
 	private const string LegacyLauncherUpdateDirectoryName = "Paper26.2LauncherUpdate";
 
-	private const string LauncherUpdateMetadataAssetName = "update.json";
+	private const string LauncherUpdateMetadataAssetName = "update.json";
+
+	private const int LauncherUpdateMaximumMetadataCharacters = 1048576;
 
 	private static string PendingLauncherUpdateDirectory;
 
@@ -300,7 +308,7 @@ internal static partial class Launcher
 			return managedExitCode;
 		}
 		bool createdNew;
-		using (Mutex mutex = new Mutex(true, MutexName, out createdNew))
+		using (Mutex mutex = new Mutex(true, string.IsNullOrEmpty(LauncherMutexNameOverride) ? MutexName : LauncherMutexNameOverride, out createdNew))
 		{
 			if (!createdNew)
 			{
@@ -402,7 +410,8 @@ internal static partial class Launcher
 		Func<bool> ask = delegate
 		{
 			bool korean = string.Equals(Localization.CurrentLanguage, Localization.Korean, StringComparison.OrdinalIgnoreCase);
-			string notes = string.IsNullOrWhiteSpace(asset.ReleaseNotes) ? (korean ? "변경 사항이 제공되지 않았습니다." : "No release notes were provided.") : asset.ReleaseNotes.Trim();
+			string selectedNotes = SelectLauncherReleaseNotes(asset, korean);
+			string notes = string.IsNullOrWhiteSpace(selectedNotes) ? (korean ? "변경 사항이 제공되지 않았습니다." : "No release notes were provided.") : selectedNotes.Trim();
 			if (notes.Length > 3000) notes = notes.Substring(0, 3000) + "…";
 			Version currentProduct;
 			Version minimumProduct;
@@ -419,9 +428,11 @@ internal static partial class Launcher
 				dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
 				dialog.MinimizeBox = false;
 				dialog.MaximizeBox = false;
-				dialog.ShowInTaskbar = false;
-				dialog.ClientSize = new Size(580, 490);
-				dialog.Font = new Font("Pretendard", 11F);
+				dialog.ShowInTaskbar = false;
+				dialog.ClientSize = new Size(580, 490);
+				dialog.AutoScaleMode = AutoScaleMode.Dpi;
+				dialog.Font = new Font("Pretendard", 11F);
+				dialog.AccessibleName = dialog.Text;
 				bool dark = launcherForm != null && launcherForm.UsesDarkTheme;
 				Color window = dark ? Color.FromArgb(20, 21, 26) : Color.FromArgb(248, 249, 252);
 				Color surface = dark ? Color.FromArgb(31, 32, 39) : Color.White;
@@ -434,8 +445,9 @@ internal static partial class Launcher
 				heading.Font = new Font(dialog.Font.FontFamily, 18F, FontStyle.Bold);
 				heading.ForeColor = textColor;
 				heading.AutoSize = true;
-				heading.Location = new Point(24, 22);
-				dialog.Controls.Add(heading);
+				heading.Location = new Point(24, 22);
+				heading.AccessibleName = heading.Text;
+				dialog.Controls.Add(heading);
 
 				Label summary = new Label();
 				summary.Text = korean
@@ -443,8 +455,9 @@ internal static partial class Launcher
 					: "v" + BuildVersionInfo.ProductVersion + "  →  v" + asset.ProductVersion + "  ·  " + FormatLauncherFileSize(asset.Size);
 				summary.ForeColor = muted;
 				summary.AutoSize = true;
-				summary.Location = new Point(27, 63);
-				dialog.Controls.Add(summary);
+				summary.Location = new Point(27, 63);
+				summary.AccessibleName = summary.Text;
+				dialog.Controls.Add(summary);
 
 				Label notesLabel = new Label();
 				notesLabel.Text = korean ? "주요 변경 사항" : "What's new";
@@ -459,17 +472,22 @@ internal static partial class Launcher
 				notesBox.BackColor = surface;
 				notesBox.ForeColor = textColor;
 				notesBox.Location = new Point(24, 124);
-				notesBox.Size = new Size(532, 238);
-				notesBox.Text = notes;
-				notesBox.TabStop = true;
-				dialog.Controls.Add(notesBox);
+				notesBox.Size = new Size(532, 238);
+				notesBox.Text = notes;
+				notesBox.TabStop = true;
+				notesBox.AccessibleName = korean ? "업데이트 주요 변경 사항" : "Launcher update release notes";
+				dialog.Controls.Add(notesBox);
 
 				Label compatibility = new Label();
 				compatibility.Text = compatibilityNotice;
 				compatibility.ForeColor = Color.FromArgb(230, 143, 38);
-				compatibility.AutoSize = true;
-				compatibility.Location = new Point(24, 369);
-				compatibility.Visible = !string.IsNullOrEmpty(compatibilityNotice);
+				compatibility.AutoSize = false;
+				compatibility.Location = new Point(24, 369);
+				compatibility.Size = new Size(532, 24);
+				compatibility.AutoEllipsis = true;
+				compatibility.AccessibleRole = AccessibleRole.Alert;
+				compatibility.AccessibleName = compatibilityNotice;
+				compatibility.Visible = !string.IsNullOrEmpty(compatibilityNotice);
 				dialog.Controls.Add(compatibility);
 
 				CheckBox ignoreBox = new CheckBox();
@@ -505,8 +523,16 @@ internal static partial class Launcher
 		{
 			return (bool)form.Invoke(ask);
 		}
-		return ask();
-	}
+		return ask();
+	}
+
+	private static string SelectLauncherReleaseNotes(LauncherReleaseAsset asset, bool korean)
+	{
+		if (asset == null) return string.Empty;
+		string preferred = korean ? asset.ReleaseNotes : asset.ReleaseNotesEn;
+		if (!string.IsNullOrWhiteSpace(preferred)) return preferred;
+		return korean ? asset.ReleaseNotesEn : asset.ReleaseNotes;
+	}
 
 	private static Button CreateLauncherUpdateDialogButton(string text, int width, string role, ButtonIcon icon, ThemePalette palette)
 	{
@@ -610,25 +636,11 @@ internal static partial class Launcher
 		}
 	}
 
-	private static LauncherReleaseAsset GetLauncherReleaseAssetFromMetadata()
-	{
-		HttpWebRequest request = (HttpWebRequest)WebRequest.Create(GetLauncherUpdateMetadataUrl());
-		request.Method = "GET";
-		request.UserAgent = LauncherUpdateUserAgent;
-		request.Accept = "application/json";
-		request.Timeout = 20000;
-		request.ReadWriteTimeout = 20000;
-		request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-		string input;
-		using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-		using (Stream stream = response.GetResponseStream())
-		using (StreamReader reader = new StreamReader(stream, Encoding.UTF8))
-		{
-			if (response.StatusCode != HttpStatusCode.OK) throw new WebException("업데이트 메타데이터 서버가 HTTP " + (int)response.StatusCode + "을 반환했습니다.");
-			input = reader.ReadToEnd();
-		}
-		return ParseLauncherUpdateMetadata(input);
-	}
+	private static LauncherReleaseAsset GetLauncherReleaseAssetFromMetadata()
+	{
+		string input = DownloadTextWithUserAgent(GetLauncherUpdateMetadataUrl(), LauncherUpdateUserAgent, GetGitHubReleaseDownloadHosts(), LauncherUpdateMaximumMetadataCharacters);
+		return ParseLauncherUpdateMetadata(input);
+	}
 
 	private static LauncherReleaseAsset ParseLauncherUpdateMetadata(string input)
 	{
@@ -646,7 +658,7 @@ internal static partial class Launcher
 		Version minimumVersion;
 		Version buildVersion;
 		if (!TryParseProductVersion(productVersion, out product) || !TryParseProductVersion(minimum, out minimumVersion) || !Version.TryParse(build, out buildVersion)) throw new InvalidDataException("업데이트 버전 정보가 올바르지 않습니다.");
-		if (!IsValidSha256(sha) || size <= 0 || size > 1073741824 || !IsAllowedLauncherDownloadUrl(url)) throw new InvalidDataException("업데이트 다운로드 정보가 안전하지 않습니다.");
+		if (!IsValidSha256(sha) || size <= 0 || size > 1073741824 || !IsAllowedLauncherDownloadUrl(url, productVersion)) throw new InvalidDataException("업데이트 다운로드 정보가 안전하지 않습니다.");
 		LauncherReleaseAsset asset = new LauncherReleaseAsset();
 		asset.Url = url;
 		asset.Sha256 = sha;
@@ -667,9 +679,10 @@ internal static partial class Launcher
 		httpWebRequest.UserAgent = LauncherUpdateUserAgent;
 		httpWebRequest.Accept = "application/vnd.github+json";
 		httpWebRequest.Headers["X-GitHub-Api-Version"] = "2022-11-28";
-		httpWebRequest.Timeout = 20000;
-		httpWebRequest.ReadWriteTimeout = 20000;
-		httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+		httpWebRequest.Timeout = 20000;
+		httpWebRequest.ReadWriteTimeout = 20000;
+		httpWebRequest.AllowAutoRedirect = false;
+		httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
 		string input;
 		using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
 		{
@@ -681,7 +694,7 @@ internal static partial class Launcher
 			{
 				using (StreamReader streamReader = new StreamReader(stream, Encoding.UTF8))
 				{
-					input = streamReader.ReadToEnd();
+					input = ReadLimitedText(streamReader, LauncherUpdateMaximumMetadataCharacters);
 				}
 			}
 		}
@@ -717,7 +730,7 @@ internal static partial class Launcher
 					throw new InvalidDataException("GitHub 릴리스 파일의 상태 또는 SHA-256 정보를 검증하지 못했습니다.");
 				}
 				string text2 = text.Substring(7);
-				if (!IsValidSha256(text2) || num <= 0 || num > 1073741824 || !IsAllowedLauncherDownloadUrl(url))
+				if (!IsValidSha256(text2) || num <= 0 || num > 1073741824 || !IsAllowedLauncherDownloadUrl(url, releaseTag))
 				{
 					throw new InvalidDataException("GitHub 릴리스 파일의 다운로드 정보를 검증하지 못했습니다.");
 				}
@@ -726,7 +739,7 @@ internal static partial class Launcher
 				launcherReleaseAsset.Sha256 = text2;
 				launcherReleaseAsset.Size = num;
 				launcherReleaseAsset.Version = result;
-				launcherReleaseAsset.ProductVersion = BuildVersionInfo.ProductVersion;
+				launcherReleaseAsset.ProductVersion = releaseTag;
 				launcherReleaseAsset.BuildNumber = result.ToString();
 				launcherReleaseAsset.ReleaseNotes = LauncherUiText("기존 릴리스 형식에서 제공된 업데이트입니다.", "This update uses the legacy release format.");
 				launcherReleaseAsset.MinimumSupportedVersion = BuildVersionInfo.MinimumSupportedVersion;
@@ -736,9 +749,12 @@ internal static partial class Launcher
 		throw new InvalidDataException("GitHub 최신 릴리스에 " + LauncherReleaseAssetName + " 파일이 없습니다.");
 	}
 
-	private static bool IsAllowedLauncherDownloadUrl(string url)
-	{
-		Uri result;
+	private static bool IsAllowedLauncherDownloadUrl(string url, string version)
+	{
+		Version parsedVersion;
+		Uri strictUrl;
+		if (!TryParseProductVersion(version, out parsedVersion) || !Uri.TryCreate(url, UriKind.Absolute, out strictUrl) || !string.IsNullOrEmpty(strictUrl.UserInfo) || !string.IsNullOrEmpty(strictUrl.Query) || !string.IsNullOrEmpty(strictUrl.Fragment) || strictUrl.AbsolutePath.IndexOf("/releases/download/v" + version + "/", StringComparison.OrdinalIgnoreCase) < 0) return false;
+		Uri result;
 		if (!Uri.TryCreate(url, UriKind.Absolute, out result) || result.Scheme != Uri.UriSchemeHttps || !result.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)) return false;
 
 		// 저장소 이름 변경 전 런처가 새 버전으로 넘어올 수 있도록 GitHub가 유지하는 이전 별칭도 허용합니다.
@@ -768,8 +784,20 @@ internal static partial class Launcher
 		{
 			return result.AbsolutePath.EndsWith("/" + LauncherReleaseAssetName, StringComparison.OrdinalIgnoreCase) || result.AbsolutePath.EndsWith("/" + LegacyLauncherReleaseAssetName, StringComparison.OrdinalIgnoreCase);
 		}
-		return false;
-	}
+		return false;
+	}
+
+	private static string[] GetGitHubReleaseDownloadHosts()
+	{
+		return new string[] { "github.com", "githubusercontent.com" };
+	}
+
+	private static bool IsAllowedLauncherTransferUrl(Uri uri, string[] allowedHosts)
+	{
+		if (uri == null) return false;
+		if (!string.IsNullOrEmpty(LauncherUpdateDownloadHostOverride) && uri.IsLoopback && uri.Scheme == Uri.UriSchemeHttp && uri.Host.Equals(LauncherUpdateDownloadHostOverride, StringComparison.OrdinalIgnoreCase)) return true;
+		return IsAllowedDownloadHost(uri.AbsoluteUri, allowedHosts);
+	}
 
 	private static bool IsValidSha256(string value)
 	{
@@ -798,55 +826,62 @@ internal static partial class Launcher
 		}
 	}
 
-	private static void DownloadLauncherUpdate(LauncherReleaseAsset asset, string destinationPath)
-	{
-		HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(asset.Url);
-		httpWebRequest.Method = "GET";
-		httpWebRequest.UserAgent = LauncherUpdateUserAgent;
-		httpWebRequest.Accept = "application/octet-stream";
-		httpWebRequest.Timeout = 120000;
-		httpWebRequest.ReadWriteTimeout = 120000;
-		httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-		using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
-		{
-			if (httpWebResponse.StatusCode != HttpStatusCode.OK)
-			{
-				throw new WebException("런처 다운로드 서버가 HTTP " + (int)httpWebResponse.StatusCode + "을 반환했습니다.");
-			}
-			using (Stream stream = httpWebResponse.GetResponseStream())
-			{
-				using (FileStream fileStream = new FileStream(destinationPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-				{
-					byte[] array = new byte[1048576];
-					long num = 0L;
-					int num2 = -1;
-					int num3;
-					while ((num3 = stream.Read(array, 0, array.Length)) > 0)
-					{
-						fileStream.Write(array, 0, num3);
-						num = checked(num + num3);
-						int num4 = (int)Math.Min(100L, checked(num * 100) / asset.Size);
-						if (num4 >= num2 + 10 || num4 == 100)
-						{
-							num2 = num4;
-							Console.Write("\r런처 업데이트 다운로드: " + num4 + "%   ");
-							ReportLauncherLoading(LauncherUiText("새 런처 다운로드 ", "Launcher download ") + num4 + "%", 15 + num4 * 75 / 100);
-						}
-						if (num > asset.Size)
-						{
-							throw new InvalidDataException("런처 다운로드 크기가 GitHub 릴리스 정보와 다릅니다.");
-						}
-					}
-					if (num != asset.Size)
-					{
-						throw new InvalidDataException("런처 다운로드가 완료되기 전에 연결이 종료되었습니다.");
-					}
-					fileStream.Flush(true);
-					Console.WriteLine();
-				}
-			}
-		}
-	}
+	private static void DownloadLauncherUpdate(LauncherReleaseAsset asset, string destinationPath)
+	{
+		Uri current = new Uri(asset.Url);
+		string[] allowedHosts = GetGitHubReleaseDownloadHosts();
+		for (int redirect = 0; redirect <= 5; redirect++)
+		{
+			if (!IsAllowedLauncherTransferUrl(current, allowedHosts)) throw new InvalidDataException("런처 다운로드 호스트를 검증하지 못했습니다.");
+			HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(current);
+			httpWebRequest.Method = "GET";
+			httpWebRequest.UserAgent = LauncherUpdateUserAgent;
+			httpWebRequest.Accept = "application/octet-stream";
+			httpWebRequest.Timeout = 120000;
+			httpWebRequest.ReadWriteTimeout = 120000;
+			httpWebRequest.AllowAutoRedirect = false;
+			httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+			using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
+			{
+				if (IsHttpRedirectStatus(httpWebResponse.StatusCode))
+				{
+					string location = httpWebResponse.Headers[HttpResponseHeader.Location];
+					Uri next;
+					if (string.IsNullOrWhiteSpace(location) || !Uri.TryCreate(current, location, out next) || !IsAllowedLauncherTransferUrl(next, allowedHosts)) throw new InvalidDataException("허용되지 않은 런처 다운로드 리디렉션입니다.");
+					current = next;
+					continue;
+				}
+				if (httpWebResponse.StatusCode != HttpStatusCode.OK) throw new WebException("런처 다운로드 서버가 HTTP " + (int)httpWebResponse.StatusCode + "을 반환했습니다.");
+				if (httpWebResponse.ContentLength >= 0L && httpWebResponse.ContentLength != asset.Size) throw new InvalidDataException("런처 다운로드 크기가 GitHub 릴리스 정보와 다릅니다.");
+				using (Stream stream = httpWebResponse.GetResponseStream())
+				using (FileStream fileStream = new FileStream(destinationPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+				{
+					byte[] array = new byte[1048576];
+					long num = 0L;
+					int num2 = -1;
+					int num3;
+					while ((num3 = stream.Read(array, 0, array.Length)) > 0)
+					{
+						fileStream.Write(array, 0, num3);
+						num = checked(num + num3);
+						int num4 = (int)Math.Min(100L, checked(num * 100) / asset.Size);
+						if (num4 >= num2 + 10 || num4 == 100)
+						{
+							num2 = num4;
+							Console.Write("\r런처 업데이트 다운로드: " + num4 + "%   ");
+							ReportLauncherLoading(LauncherUiText("새 런처 다운로드 ", "Launcher download ") + num4 + "%", 15 + num4 * 75 / 100);
+						}
+						if (num > asset.Size) throw new InvalidDataException("런처 다운로드 크기가 GitHub 릴리스 정보와 다릅니다.");
+					}
+					if (num != asset.Size) throw new InvalidDataException("런처 다운로드가 완료되기 전에 연결이 종료되었습니다.");
+					fileStream.Flush(true);
+					Console.WriteLine();
+				}
+				return;
+			}
+		}
+		throw new InvalidDataException("런처 다운로드 리디렉션 횟수가 안전 제한을 초과했습니다.");
+	}
 
 	private static int ApplyDownloadedLauncherUpdate(string targetPath, string expectedHash, string updateDirectory, string parentProcessId)
 	{
@@ -2706,10 +2741,10 @@ internal static partial class Launcher
 		return null;
 	}
 
-	private static bool IsAllowedDownloadHost(string url, string[] allowedHosts)
-	{
-		Uri result;
-		if (!Uri.TryCreate(url, UriKind.Absolute, out result) || result.Scheme != Uri.UriSchemeHttps)
+	private static bool IsAllowedDownloadHost(string url, string[] allowedHosts)
+	{
+		Uri result;
+		if (allowedHosts == null || !Uri.TryCreate(url, UriKind.Absolute, out result) || result.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(result.UserInfo))
 		{
 			return false;
 		}
@@ -2720,8 +2755,14 @@ internal static partial class Launcher
 				return true;
 			}
 		}
-		return false;
-	}
+		return false;
+	}
+
+	private static bool IsHttpRedirectStatus(HttpStatusCode statusCode)
+	{
+		int status = (int)statusCode;
+		return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
+	}
 
 	private static void DownloadFileWithUserAgent(string url, string destinationPath, string userAgent)
 	{
@@ -2744,7 +2785,7 @@ internal static partial class Launcher
 			httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
 			using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
 			{
-				if (httpWebResponse.StatusCode == HttpStatusCode.MovedPermanently || httpWebResponse.StatusCode == HttpStatusCode.Redirect || httpWebResponse.StatusCode == HttpStatusCode.RedirectMethod || httpWebResponse.StatusCode == HttpStatusCode.TemporaryRedirect)
+				if (IsHttpRedirectStatus(httpWebResponse.StatusCode))
 				{
 					string location = httpWebResponse.Headers[HttpResponseHeader.Location];
 					Uri next;
@@ -3125,30 +3166,47 @@ internal static partial class Launcher
 	}
 
 	private static string DownloadTextWithUserAgent(string url, string userAgent)
-	{
-		HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
-		httpWebRequest.Method = "GET";
-		httpWebRequest.UserAgent = userAgent;
-		httpWebRequest.Timeout = 15000;
-		httpWebRequest.ReadWriteTimeout = 15000;
-		httpWebRequest.AllowAutoRedirect = false;
-		httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-		using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
+	{
+		Uri source = new Uri(url);
+		return DownloadTextWithUserAgent(url, userAgent, new string[] { source.Host }, 8388608);
+	}
+
+	private static string DownloadTextWithUserAgent(string url, string userAgent, string[] allowedHosts, int maximumCharacters)
+	{
+		if (maximumCharacters < 1 || maximumCharacters > 8388608) throw new ArgumentOutOfRangeException("maximumCharacters");
+		Uri current = new Uri(url);
+		for (int redirect = 0; redirect <= 5; redirect++)
 		{
-			if (httpWebResponse.ContentLength > 8388608L) throw new InvalidDataException("응답이 안전 크기 제한을 초과했습니다.");
-			using (Stream stream = httpWebResponse.GetResponseStream())
-			{
-				using (StreamReader streamReader = new StreamReader(stream, Encoding.UTF8))
-				{
-					if (httpWebResponse.StatusCode != HttpStatusCode.OK)
-					{
-						throw new WebException("HTTP " + (int)httpWebResponse.StatusCode);
-					}
-					return ReadLimitedText(streamReader, 8388608);
-				}
-			}
-		}
-	}
+			if (!IsAllowedDownloadHost(current.AbsoluteUri, allowedHosts)) throw new InvalidDataException("응답 호스트를 검증하지 못했습니다.");
+			HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(current);
+			httpWebRequest.Method = "GET";
+			httpWebRequest.UserAgent = userAgent;
+			httpWebRequest.Accept = "application/json,text/plain,*/*";
+			httpWebRequest.Timeout = 15000;
+			httpWebRequest.ReadWriteTimeout = 15000;
+			httpWebRequest.AllowAutoRedirect = false;
+			httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+			using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())
+			{
+				if (IsHttpRedirectStatus(httpWebResponse.StatusCode))
+				{
+					string location = httpWebResponse.Headers[HttpResponseHeader.Location];
+					Uri next;
+					if (string.IsNullOrWhiteSpace(location) || !Uri.TryCreate(current, location, out next) || !IsAllowedDownloadHost(next.AbsoluteUri, allowedHosts)) throw new InvalidDataException("허용되지 않은 응답 리디렉션입니다.");
+					current = next;
+					continue;
+				}
+				if (httpWebResponse.StatusCode != HttpStatusCode.OK) throw new WebException("HTTP " + (int)httpWebResponse.StatusCode);
+				if (httpWebResponse.ContentLength > checked((long)maximumCharacters * 4L)) throw new InvalidDataException("응답이 안전 크기 제한을 초과했습니다.");
+				using (Stream stream = httpWebResponse.GetResponseStream())
+				using (StreamReader streamReader = new StreamReader(stream, Encoding.UTF8))
+				{
+					return ReadLimitedText(streamReader, maximumCharacters);
+				}
+			}
+		}
+		throw new InvalidDataException("응답 리디렉션 횟수가 안전 제한을 초과했습니다.");
+	}
 
 	private static bool HashMatches(string path, string expectedHash)
 	{

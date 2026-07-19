@@ -153,7 +153,7 @@ internal static partial class Launcher
 			if (quickCommandPanel == null) return;
 			quickCommandTitle.Text = QuickText("빠른 명령", "Quick commands");
 			quickCommandMenuButton.Text = QuickText("명령 선택", "Choose command");
-			quickCommandManageButton.Text = QuickText("명령·브리지 관리", "Commands & bridge");
+			quickCommandManageButton.Text = QuickText("명령·브리지 관리", "Commands and bridge");
 			quickCommandSendButton.Text = QuickText("전송", "Send");
 			quickCommandSyntax.Text = QuickText("명령을 입력하거나 목록에서 선택하세요.", "Type a command or choose one from the list.");
 			ConfigureAccessibleField(quickCommandBox, QuickText("빠른 서버 명령", "Quick server command"), QuickText("현재 커서 위치에 맞는 후보를 표시합니다. 컨트롤과 스페이스 키로 강제로 열 수 있습니다.", "Shows suggestions for the current cursor. Press Ctrl+Space to force suggestions."));
@@ -512,6 +512,7 @@ internal static partial class Launcher
 			rootPanel.Controls.Add(userGroup, 0, 0);
 			commandList = new ListBox();
 			commandList.Dock = DockStyle.Fill;
+			ConfigureAccessibleField(commandList, LauncherUiText("사용자 명령 목록", "User command list"), LauncherUiText("추가하거나 수정할 사용자 명령을 선택합니다.", "Select a user command to add or edit."));
 			userGroup.Controls.Add(commandList);
 			Panel commandButtons = new Panel();
 			commandButtons.Dock = DockStyle.Bottom;
@@ -530,6 +531,8 @@ internal static partial class Launcher
 			bridgeStatus.Dock = DockStyle.Top;
 			bridgeStatus.Height = 190;
 			bridgeStatus.AutoEllipsis = true;
+			bridgeStatus.AccessibleName = LauncherUiText("명령 브리지 상태", "Command bridge status");
+			bridgeStatus.AccessibleDescription = LauncherUiText("지원 여부, 설치 상태, 연결과 호환성 정보를 표시합니다.", "Shows support, installation, connection, and compatibility details.");
 			bridgeGroup.Controls.Add(bridgeStatus);
 			FlowLayoutPanel bridgeButtons = new FlowLayoutPanel();
 			bridgeButtons.Dock = DockStyle.Bottom;
@@ -682,6 +685,7 @@ internal static partial class Launcher
 			MinimizeBox = false;
 			ClientSize = new Size(560, 500);
 			Font = new Font("Pretendard", 11F);
+			AutoScaleMode = AutoScaleMode.Dpi;
 			TableLayoutPanel layout = new TableLayoutPanel();
 			layout.Dock = DockStyle.Fill;
 			layout.Padding = new Padding(22);
@@ -691,11 +695,11 @@ internal static partial class Launcher
 			nameBox = AddEditorText(layout, LauncherUiText("표시 이름", "Display name"), value == null ? string.Empty : value.Name);
 			descriptionBox = AddEditorText(layout, LauncherUiText("설명", "Description"), value == null ? string.Empty : value.Description);
 			layout.Controls.Add(new Label { Text = LauncherUiText("카테고리", "Category"), AutoSize = true });
-			categoryBox = new ComboBox(); categoryBox.DropDownStyle = ComboBoxStyle.DropDownList; categoryBox.Items.AddRange(new object[] { "user", "server", "player", "whitelist", "world", "info" }); categoryBox.SelectedItem = value == null ? "user" : value.Category; if (categoryBox.SelectedIndex < 0) categoryBox.SelectedIndex = 0; categoryBox.Dock = DockStyle.Top; layout.Controls.Add(categoryBox);
+			categoryBox = new ComboBox(); categoryBox.DropDownStyle = ComboBoxStyle.DropDownList; categoryBox.Items.AddRange(new object[] { "user", "server", "player", "whitelist", "world", "info" }); categoryBox.SelectedItem = value == null ? "user" : value.Category; if (categoryBox.SelectedIndex < 0) categoryBox.SelectedIndex = 0; categoryBox.Dock = DockStyle.Top; ConfigureAccessibleField(categoryBox, LauncherUiText("카테고리", "Category"), LauncherUiText("명령이 표시될 분류를 선택합니다.", "Choose the category where this command appears.")); layout.Controls.Add(categoryBox);
 			templateBox = AddEditorText(layout, LauncherUiText("명령 템플릿", "Command template"), value == null ? string.Empty : value.Template);
 			confirmBox = new CheckBox(); confirmBox.Text = LauncherUiText("실행 전에 확인", "Confirm before execution"); confirmBox.Checked = value != null && value.Confirm; confirmBox.AutoSize = true; layout.Controls.Add(confirmBox);
 			layout.Controls.Add(new Label { Text = LauncherUiText("지원 서버 종류 (선택하지 않으면 모두)", "Supported server types (none means all)"), AutoSize = true });
-			serverTypes = new CheckedListBox(); serverTypes.Height = 90; serverTypes.Items.AddRange(new object[] { "paper", "purpur", "vanilla", "fabric", "forge", "neoforge", "custom" }); layout.Controls.Add(serverTypes);
+			serverTypes = new CheckedListBox(); serverTypes.Height = 90; serverTypes.Items.AddRange(new object[] { "paper", "purpur", "vanilla", "fabric", "forge", "neoforge", "custom" }); ConfigureAccessibleField(serverTypes, LauncherUiText("지원 서버 종류", "Supported server types"), LauncherUiText("선택하지 않으면 모든 서버 종류에서 명령을 표시합니다.", "Leave all items clear to show the command for every server type.")); layout.Controls.Add(serverTypes);
 			if (value != null && value.ServerTypes != null) for (int i = 0; i < serverTypes.Items.Count; i++) if (value.ServerTypes.Contains(Convert.ToString(serverTypes.Items[i]), StringComparer.OrdinalIgnoreCase)) serverTypes.SetItemChecked(i, true);
 			Label hint = new Label(); hint.Text = LauncherUiText("매개변수 예: {player}, {gamemode}, {item}, {count}, {message}", "Parameters: {player}, {gamemode}, {item}, {count}, {message}"); hint.AutoSize = true; layout.Controls.Add(hint);
 			FlowLayoutPanel buttons = new FlowLayoutPanel(); buttons.FlowDirection = FlowDirection.RightToLeft; buttons.Dock = DockStyle.Fill; layout.Controls.Add(buttons);
@@ -708,7 +712,7 @@ internal static partial class Launcher
 		private static TextBox AddEditorText(TableLayoutPanel layout, string label, string value)
 		{
 			layout.Controls.Add(new Label { Text = label, AutoSize = true, Margin = new Padding(0, 7, 0, 3) });
-			TextBox box = new TextBox(); box.Text = value ?? string.Empty; box.Dock = DockStyle.Top; layout.Controls.Add(box); return box;
+			TextBox box = new TextBox(); box.Text = value ?? string.Empty; box.Dock = DockStyle.Top; ConfigureAccessibleField(box, label, LauncherUiText("사용자 명령 정보를 입력합니다.", "Enter the user command information.")); layout.Controls.Add(box); return box;
 		}
 
 		private void Save(object sender, EventArgs eventArgs)
@@ -736,7 +740,7 @@ internal static partial class Launcher
 			ClientSize = new Size(560, 330);
 			AutoScaleMode = AutoScaleMode.Dpi;
 			Font = new Font("Pretendard", 11F);
-			Label title = new Label(); title.Text = LauncherUiText("실시간 명령 자동완성 플러그인을 설치하시겠습니까?", "Install the live command suggestion plugin?"); title.Font = new Font("Pretendard", 16F, FontStyle.Bold); title.AutoSize = false; title.Location = new Point(28, 26); title.Size = new Size(584, 56); Controls.Add(title);
+			Label title = new Label(); title.Text = LauncherUiText("실시간 명령 자동완성 플러그인을 설치하시겠습니까?", "Install the live command suggestion plugin?"); title.Font = new Font("Pretendard", 16F, FontStyle.Bold); title.AutoSize = false; title.Location = new Point(28, 26); title.Size = new Size(500, 56); Controls.Add(title);
 			Label body = new Label(); body.Text = LauncherUiText("설치하면 현재 서버와 설치된 플러그인의 명령 및\r\n자동완성 후보를 런처에서 실시간으로 사용할 수 있습니다.\r\n\r\n브리지는 현재 PC 내부에서만 런처와 통신하며,\r\n별도의 외부 네트워크 포트를 열지 않습니다.", "It provides live commands and suggestions from this server\r\nand its installed plugins.\r\n\r\nThe bridge communicates only inside this PC and does not\r\nopen a separate external network port."); body.Location = new Point(30, 88); body.Size = new Size(500, 124); Controls.Add(body);
 			defaultChoice = new CheckBox(); defaultChoice.Text = LauncherUiText("이 선택을 이후 새 Paper/Purpur 서버의 기본값으로 사용", "Use this choice as the default for new Paper/Purpur servers"); defaultChoice.Location = new Point(30, 218); defaultChoice.Size = new Size(500, 30); Controls.Add(defaultChoice);
 			Button skip = new RoundedButton(); skip.Text = LauncherUiText("설치하지 않기", "Do not install"); skip.Size = new Size(154, 44); skip.Location = new Point(206, 266); skip.Click += delegate { Complete("skip"); }; Controls.Add(skip);

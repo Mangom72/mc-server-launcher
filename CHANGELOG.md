@@ -1,524 +1,97 @@
-﻿# Changelog
+# Changelog
 
 제품 버전은 [Semantic Versioning](https://semver.org/)을 사용하며, `26.2.45.xx` 값은 별도의 내부 빌드 번호입니다.
 
 Product versions follow [Semantic Versioning](https://semver.org/), while `26.2.45.xx` is a separate internal build number.
 
+## [1.5.23] - 2026-07-20
+
+### Korean
+
+- **자동 업데이트와 명령 브리지 복구**: GitHub Release 별칭에서 CDN까지 이어지는 리디렉션을 허용 호스트·저장소·버전·파일명으로 검증하고, 메타데이터와 바이너리 크기를 제한해 실제 공개 브리지 설치와 이전 런처 자동 업데이트가 모두 동작하도록 수정했습니다.
+- **네트워크·이미지 보안 강화**: Modrinth API와 CDN 응답의 리디렉션·크기를 제한하고, 아이콘 변환 URL을 안전하게 인코딩하며 디코딩된 이미지의 가로·세로와 전체 픽셀 수를 제한했습니다.
+- **UI·UX·접근성 개선**: 영어 업데이트 화면에 영어 릴리스 노트를 표시하고, 보조 창 DPI 배율·버튼 줄바꿈·타이머 해제를 보완했으며, 입력·목록·콘솔의 스크린 리더 이름과 영어 빠른 명령 문구를 개선했습니다.
+- **빌드 공급망 강화**: GitHub Actions를 전체 커밋 SHA로 고정하고 체크아웃 자격 증명 유지를 끄며, 코드 서명 비밀을 필요한 단계로만 제한하고 임시 PFX를 항상 정리하도록 변경했습니다.
+- **검증과 유지보수**: UPnP 반복 시작·중단, 매핑 소유권·대체 포트·지연 정리 회귀를 포함한 22개 런처 테스트와 8개 브리지 프로토콜 테스트를 통과했으며, 깨진 변경 이력 인코딩과 오래된 일회성 스크립트를 정리했습니다.
+
+### English
+
+- **Restored automatic updates and bridge downloads**: Validated redirects from GitHub Release aliases through the CDN by host, repository, version, and filename, bounded metadata and binaries, and restored both public bridge installation and updates from older launchers.
+- **Hardened network and image handling**: Bounded redirects and response sizes for the Modrinth API and CDN, safely encoded image-proxy URLs, and limited decoded image dimensions and total pixel count.
+- **Improved UI, UX, and accessibility**: Displayed English release notes in the English update dialog, improved secondary-window DPI scaling and button wrapping, disposed timers, and added screen-reader names for inputs, lists, and consoles.
+- **Hardened the build supply chain**: Pinned GitHub Actions to full commit SHAs, disabled persisted checkout credentials, scoped signing secrets to required steps, and always removed temporary PFX files.
+- **Expanded verification and maintenance**: Passed 22 launcher test groups—including repeated UPnP start/stop, ownership, alternate-port, and delayed-cleanup regressions—plus 8 bridge protocol tests, and repaired corrupted changelog history and obsolete one-off scripts.
 
 ## [1.5.22] - 2026-07-20
 
 ### Korean
-- **기존 버전 자동 업데이트 호환 복구**: `v1.5.20` 이하 런처가 허용하는 이전 저장소 별칭 다운로드 URL을 릴리스 메타데이터에 유지하여 최신 버전으로 바로 업데이트할 수 있도록 수정했습니다.
-- **저장소 이전 경로 동시 허용**: 새 런처는 정식 `Mangom72/MineHarbor` 경로와 기존 `Mangom72/mc-server-launcher` 별칭을 모두 엄격한 GitHub Release 경로로 검증합니다.
-- **실제 이전 바이너리 회귀 검증**: 공개 `v1.5.20` 실행 파일이 새 `latest/update.json`을 파싱하고 실행 파일의 크기·SHA-256을 검증할 수 있는지 릴리스 후 다시 확인합니다.
+
+- 기존 저장소 별칭 URL을 메타데이터에 유지해 `v1.5.20` 이하 런처의 자동 업데이트 호환을 복구했습니다.
+- 새 런처는 정식 저장소와 이전 별칭의 엄격한 GitHub Release 경로만 허용합니다.
 
 ### English
-- **Restored automatic updates for older versions**: Kept the legacy repository-alias download URLs in release metadata so launchers through `v1.5.20` can update directly to the latest release.
-- **Allowed both repository migration paths**: New launchers strictly accept GitHub Release downloads from both the canonical `Mangom72/MineHarbor` path and the legacy `Mangom72/mc-server-launcher` alias.
-- **Regression-tested with the real previous binary**: The published `v1.5.20` executable is checked after release to ensure it can parse the new `latest/update.json` and verify the executable size and SHA-256.
 
+- Restored automatic updates for launchers through `v1.5.20` by retaining the legacy repository-alias URL in release metadata.
+- New launchers accept only strict GitHub Release paths from the canonical repository or its legacy alias.
 
 ## [1.5.21] - 2026-07-20
 
 ### Korean
-- **UPnP 기본 경로 및 백업 강화**: 직접 SSDP/SOAP 매핑을 기본 경로로 완성하고 Windows NATUPnP COM을 보조 경로로 유지했으며, 기본 외부 포트가 충돌하면 최대 8개의 대체 포트를 순서대로 시도합니다.
-- **반복 실행 수명 주기 안정화**: 서버 중단 시 진행 중인 SOAP 요청을 취소하고, 이전 실행의 지연 정리가 새 실행의 매핑을 삭제하지 않도록 실행 세대·정리 경합 보호를 추가했습니다.
-- **매핑 복구 및 소유권 보호**: 추가 응답 유실 시 공유기 상태를 재조회하고, 설명·프로토콜·외부/내부 포트·내부 IP가 정확히 일치하는 MineHarbor 소유 매핑만 삭제합니다.
-- **자동 업데이트 경로 정비**: 런처와 릴리스 메타데이터가 정식 `Mangom72/MineHarbor` GitHub Release를 사용하도록 통일하고, 릴리스 검증에서 다운로드 URL·크기·SHA-256을 확인합니다.
+
+- 직접 SSDP/SOAP UPnP를 기본 경로로 완성하고 Windows COM 백업과 최대 8개 대체 외부 포트를 추가했습니다.
+- 실행 세대·취소·소유권 검증으로 반복 시작·중단과 지연 정리 경합을 안정화했습니다.
 
 ### English
-- **Stronger UPnP primary and fallback paths**: Completed direct SSDP/SOAP mapping as the primary path, retained Windows NATUPnP COM as a fallback, and added up to eight alternate external-port attempts when the preferred port conflicts.
-- **Stable repeated-run lifecycle**: Cancelled in-flight SOAP calls when the server stops and added generation and cleanup-race guards so delayed cleanup from an older run cannot remove a newer mapping.
-- **Mapping recovery and ownership protection**: Rechecked router state after a lost add response and removed only MineHarbor-owned mappings whose description, protocol, external and internal ports, and internal address all match exactly.
-- **Canonical automatic-update path**: Standardized launcher and metadata downloads on the official `Mangom72/MineHarbor` GitHub Release and verify release URLs, sizes, and SHA-256 hashes before publication.
+
+- Completed direct SSDP/SOAP UPnP as the primary path, retained Windows COM fallback, and added up to eight alternate external ports.
+- Stabilized repeated start/stop and delayed cleanup races with generations, cancellation, and exact ownership checks.
 
 ## [1.5.20] - 2026-07-18
 
 ### Korean
-- **UPnP 소유권 및 복구 강화**: 실행별 매핑 기록, 프로세스 간 보호, 삭제 직전 소유권 재검증을 적용하여 현재 실행이 만든 정확히 일치하는 매핑만 정리하도록 강화했습니다.
-- **외부 접속 진단 안정화**: TCP·UDP 부분 성공, 외부 검사 장애, 중복 재검사, IPv4·IPv6 및 가상·VPN 어댑터 상태를 구분하고 UPnP 정리를 비동기로 전환했습니다.
-- **공급망 및 백업 보안 강화**: Forge Installer와 Inno Setup의 해시·서명을 검증하고 다운로드 리디렉션·크기를 제한했으며, 백업 manifest 밖의 파일과 과도한 압축 해제량을 차단했습니다.
-- **명령 및 빌드 안전성 강화**: 모든 직접 콘솔 경로에 위험 명령 확인을 적용하고 일반 빌드에서 고정 비밀번호 인증서와 사용자 인증서 저장소 변경을 제거했습니다.
+
+- UPnP 실행별 소유권, 외부 접속 진단, Forge/Inno Setup 검증, 백업 압축 해제 제한과 위험 명령 확인을 강화했습니다.
 
 ### English
-- **Stronger UPnP ownership and recovery**: Added per-run mapping records, cross-process protection, and ownership revalidation immediately before deletion so only exact mappings created by the current run are removed.
-- **More reliable external-access diagnostics**: Distinguished TCP/UDP partial success, checker outages, duplicate rechecks, dual-stack addresses, and virtual or VPN adapters, while moving UPnP cleanup off the UI thread.
-- **Hardened supply chain and backups**: Verified Forge Installer and Inno Setup hashes and signatures, bounded redirects and download sizes, and rejected backup files outside the manifest or beyond extraction limits.
-- **Safer commands and builds**: Applied dangerous-command confirmation to every direct console path and removed fixed-password certificate creation and user certificate-store changes from normal builds.
 
-
-## [1.5.19] - 2026-07-18
-
-### Korean
-- **UPnP 소유권 보호**: 실행별 소유권 기록과 현재 매핑 재검증을 추가하여 MineHarbor가 만든 현재 실행 매핑만 삭제하고, 오래되거나 변조된 기록으로 사용자 매핑을 삭제하지 않도록 수정했습니다.
-- **외부 접속 안정성**: TCP·UDP 부분 성공, 검사 서비스 장애, 중복 재검사, IPv4·IPv6 및 가상 어댑터 상태를 구분하고 UPnP 정리를 비동기로 전환했습니다.
-- **공급망 및 데이터 보안**: Forge Installer와 Inno Setup의 해시 검증을 추가하고, 다운로드 리디렉션·크기를 제한했으며, 백업 manifest에 없는 파일과 과도한 압축 해제량을 차단했습니다.
-- **명령 및 빌드 안전성**: 모든 직접 콘솔 경로에 위험 명령 확인을 적용하고, 일반 빌드가 고정 비밀번호 인증서나 사용자 인증서 저장소를 만들지 않도록 변경했습니다.
-
-### English
-- **UPnP ownership protection**: Added per-run ownership tracking and current-mapping verification so MineHarbor removes only mappings created by the same run and never trusts stale or modified records to delete user mappings.
-- **External-access resilience**: Distinguished TCP/UDP partial success, checker outages, duplicate rechecks, dual-stack addresses, and virtual adapters, while making stale UPnP cleanup asynchronous.
-- **Supply-chain and data security**: Added hash checks for Forge Installer and Inno Setup, bounded redirects and download sizes, and rejected backup files absent from the manifest or exceeding extraction limits.
-- **Command and build safety**: Applied dangerous-command confirmation to every direct console path and stopped normal builds from creating fixed-password certificates or modifying the user certificate store.
-
-## [1.5.18] - 2026-07-16
-
-### Korean
-- **UI 및 동작 안정화**: 라이트 테마 전환 시 윈도우 타이틀 바 색상이 즉시 동기화되지 않던 문제를 수정했습니다.
-- **UPnP 포트포워딩 롤백**: 최근 도입된 소켓 방식 UPnP의 구현 누락으로 포트포워딩이 정상 작동하지 않던 문제를 수정하기 위해 기존의 안정적인 Windows COM(NATUPnP) 방식으로 롤백했습니다.
-- **버튼 정렬 수정**: 상단 우측의 런처 업데이트 버튼이 다른 버튼들보다 살짝 높게 위치하던 문제를 수정했습니다.
-
-### English
-- **UI & Stability Improvements**: Fixed an issue where the Windows title bar color would not immediately synchronize when switching to the light theme.
-- **UPnP Port Forwarding Rollback**: Reverted the UPnP implementation back to the stable Windows COM (NATUPnP) method to fix port forwarding failures caused by incomplete socket-based UPnP logic.
-- **Button Alignment Fix**: Fixed a minor layout issue where the launcher update button was positioned slightly higher than adjacent buttons.
-
-## [1.5.17] - 2026-07-16
-
-### Korean
-- **타이틀 바 동기화 핫픽스**: 런처 초기 구동 시 윈도우 핸들(HWND)이 재생성되면서 발생하던 DWM 색상 초기화 현상을 수정하여 타이틀 바 일체감이 항상 유지되도록 개선했습니다.
-
-### English
-- **Title Bar Cohesion Hotfix**: Fixed an issue where the native DWM title bar color resets to default due to window handle recreation during the launcher's initialization phase.
-
-## [1.5.16] - 2026-07-16
-
-### Korean
-- **타이틀 바 디자인 일체감 개선 (Windows 11)**: Windows 11 DWM API(DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR 등)를 연동하여 OS 기본 타이틀 바의 배경색과 텍스트 색상이 런처 내부의 모던 테마(다크/라이트)와 완벽히 동기화되도록 개선했습니다.
-- **기본 UX 유지**: 테두리 없는(Borderless) 프레임을 강제하지 않아 Windows 고유의 스냅 레이아웃, 부드러운 창 크기 조절, 네이티브 다중 모니터 DPI 스케일링이 그대로 유지됩니다. Windows 10 환경에서는 안정성을 위해 OS 기본 타이틀 바로 자연스럽게 대체(Fallback)됩니다.
-
-### English
-- **Title Bar UI Cohesion (Windows 11)**: Integrated Windows 11 DWM APIs (DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, etc.) to synchronize the native OS title bar colors with the launcher's internal modern themes (Dark/Light).
-- **Native UX Preserved**: By avoiding borderless form workarounds, native Windows features such as Snap Layouts, smooth window resizing, and native multi-monitor DPI scaling are fully preserved. On Windows 10 environments, the app gracefully falls back to the default OS title bar for maximum stability.
-
-## [1.5.15] - 2026-07-15
-
-### Korean
-- **UPnP 아키텍처 개편**: 외부 포트 개방(UPnP) 기능을 기존 COM 방식에서 순수 C# 소켓(UdpClient/HttpClient) 방식으로 리팩토링했습니다. 이로 인해 최신 공유기 및 복잡한 네트워크 환경에서의 안정성과 응답 속도가 크게 향상되었습니다.
-- **포트 매핑 충돌 복구**: 서버 비정상 종료 시 남겨진 고아 UPnP 포트 포워딩 규칙을 추적하여, 런처 재실행 시 자동으로 정리하는 기능이 추가되었습니다.
-- **보안 및 스레딩 향상**: UPnP 장치 응답(XML) 파싱 과정에서 DTD 처리를 금지하여 외부 공격에 대비하고, 네트워크 탐색 작업을 완벽한 비동기로 분리해 UI 멈춤을 방지했습니다.
-
-### English
-- **UPnP Architecture Overhaul**: Refactored the UPnP port forwarding module from legacy COM objects to a pure C# socket (UdpClient/HttpClient) implementation. This significantly improves stability and discovery speed across modern routers and complex network environments.
-- **Port Mapping Crash Recovery**: Implemented a tracker for active UPnP rules. If the server or launcher crashes unexpectedly, orphaned port forwarding rules will be automatically cleaned up upon the next launch.
-- **Enhanced Security & Threading**: Hardened UPnP response (XML) parsing by disabling DTD processing to mitigate external vulnerabilities. Network scanning has also been fully decoupled into asynchronous operations, preventing UI freezes.
-
-## [1.5.14] - 2026-07-15
-
-### Korean
-- **렌더링 버그 수정**: 콘텐츠 탭(모드/플러그인 탐색)에서 `WebP` 및 `SVG` 확장자를 사용하는 특정 모드들의 아이콘이 표시되지 않던 문제를 수정했습니다. 이제 해당 형식의 이미지들은 런처 내부에서 자동으로 호환되는 `PNG`로 우회 변환되어 정상 출력됩니다.
-
-### English
-- **Rendering Bug Fix**: Fixed an issue in the Content Tab where thumbnails for plugins/mods using `WebP` or `SVG` formats failed to load. These unsupported image structures are now dynamically proxied and transcoded into `PNG` formats for seamless rendering.
-
-## [1.5.13] - 2026-07-15
-
-### Korean
-- **보안 강화**: 인증서(PFX) 파일의 의도치 않은 유출을 방지하기 위해 `.gitignore`를 업데이트하였으며, Modrinth 바이너리 다운로드 시 HTTPS 리다이렉트 도메인 검증 및 악의적인 다중 명령어 주입 공격(CRLF) 차단 기능을 추가했습니다. 또한, 통신 보안 강화를 위해 .NET Framework 환경에서 구형 프로토콜을 차단하고 최신 TLS(1.2+)를 강제하도록 개선했습니다.
-- **오류 및 안정성 보완**: 공인 IP 조회 서버 장애 시 전체 네트워크 점검 기능이 마비되는 문제를 해결하기 위해 다중 IP 확인(ipify, amazonaws, ifconfig.me) 서비스를 순차 적용했으며, 비정상 종료 시 남아있는 구형 Bridge 세션 찌꺼기를 시작 시 제거하도록 개선했습니다.
-- **UI 및 사용자 경험(UX) 고도화**: 설정에서 언어 변경 시 사용 중인 창을 먼저 닫도록 보호 로직을 추가하여 안전성을 높였습니다. 런처 구동 실패 시 발생하는 에러를 분석하여 직관적인 안내와 함께 원클릭 복구(포트 재할당, 설정 진입) 대화상자를 도입했으며, 불필요한 공유기 포트포워딩 매핑을 런처에서 수동으로 정리할 수 있는 'UPnP 정리' 버튼을 추가했습니다.
-
-### English
-- **Security Enhancements**: Updated `.gitignore` to prevent unintentional leaks of PFX certificates. Implemented strict HTTPS redirect domain verification for Modrinth downloads and mitigated malicious CRLF injection vulnerabilities in server commands. Enforced modern TLS 1.2+ protocols across the application.
-- **Stability & Resilience Improvements**: Implemented a fallback mechanism utilizing multiple IP resolution services (ipify, amazonaws, ifconfig.me) to prevent single points of failure during external IP checks. Enhanced stability by proactively clearing stale Bridge session files left behind after abnormal terminations.
-- **UI & UX Polish**: Added safeguard logic to prevent language changes while active tool windows are open. Introduced intuitive one-click recovery dialogs for common server launch failures (e.g., port conflicts, EULA). Added a 'Clear UPnP' button to the network tools to manually purge unused router port-forwarding mappings.
-
-## [1.5.12] - 2026-07-15
-
-### Korean
-- **보안 및 무결성 강화**: 런처 업데이트 무결성(해시) 검증 실패 시 보안을 위해 서버 실행을 강제로 차단하도록 수정했으며, 환경 변수 인젝션(`%`) 버그를 해결했습니다.
-- **프로세스 생명주기 및 안정성 개선**: 자식 프로세스에 올바르게 Job Object가 할당되도록 수정하고, 프로세스 강제 종료 시 발생하던 락(Lock) 및 예외 처리 로직을 대폭 개선하여 UI 버튼이 영구적으로 잠기는 현상을 해결했습니다.
-- **비동기 처리 최적화**: 메인 UI 스레드에서 서버 종료 명령을 날릴 때 발생하던 블로킹(멈춤) 현상을 `ThreadPool`과 `Task.Run`을 활용한 비동기 처리로 개선하여 반응성을 높였습니다.
-- **추적성 및 로깅 강화**: 빈 `catch` 블록들을 제거하고, 실패 원인을 명확히 파악할 수 있도록 최소한의 디버깅 가능 로그(콘솔 출력)를 남기도록 리팩터링했습니다.
-
-### English
-- **Security & Integrity Enhancements**: The launcher now strictly blocks server startup if the update integrity (hash) check fails. Mitigated environment variable injection vulnerabilities by escaping `%` characters.
-- **Process Lifecycle & Stability**: Fixed an issue where the Job Object was incorrectly assigned. Improved exception handling during process force-kills and lock acquisitions, ensuring UI buttons no longer become permanently disabled.
-- **Asynchronous Optimization**: Replaced synchronous, thread-blocking server termination commands with asynchronous dispatches (`Task.Run` / `ThreadPool`), significantly improving main UI responsiveness.
-- **Enhanced Traceability & Logging**: Eliminated empty `catch` blocks across the codebase and introduced functional debug logging for exceptions, improving overall diagnosability.
-
-## [1.5.11] - 2026-07-15
-
-### Korean
-- ?꾨컲?곸씤 ?꾨줈?몄뒪 ?앸챸二쇨린 諛??곗쿂 ?낅뜲?댄듃 ?덉젙?깆쓣 ????곹뼢?섎뒗 ?꾨㈃ 由ы뙥?곕쭅???곸슜?섏뿀?듬땲?? 
-- ?먯떇 ?꾨줈?몄뒪 異붿쟻(Job Object) 濡쒖쭅???뺤긽?뷀븯怨? 紐낅졊以?%) ?섍꼍 蹂???몄젥??諛⑹뼱 肄붾뱶瑜??꾩엯?덉뒿?덈떎.
-- ?덇린移??딆? ?덉쇅 諛쒖깮 ???먮윭媛 ?쇱폒吏嫄곕굹 ?쒕쾭 媛뺤젣 醫낅즺 ??UI媛 釉붾줈?밸릺??臾몄젣?ㅼ쓣 ?꾨? ?닿껐?덉뒿?덈떎.
-
-### English
-- Applied a comprehensive refactoring to significantly improve process lifecycle management and launcher update stability.
-- Fixed the child process tracking (Job Object) logic and mitigated a command-line environment variable injection vulnerability (%).
-- Resolved multiple issues where unexpected exceptions were swallowed or caused the launcher UI to deadlock during force stops.
-
-## [1.5.10] - 2026-07-15
-
-### Korean
-- ?쇱씠??紐⑤뱶 ?깆뿉??蹂댁“ 踰꾪듉?ㅼ씠 ?⑤꼸怨??숈씪???됱긽?쇰줈 ?쒖떆?섏뼱 ?덉뿉 蹂댁씠吏 ?딅뜕 ?뚮뜑留?踰꾧렇瑜??섏젙?섍퀬 ?뚮몢由??좊챸?꾨? ?믪??듬땲??
-- 1.5.9 踰꾩쟾?먯꽌 援먯껜??`Pretendard` 湲瑗댁씠 湲곕낯 ?섍꼍?먯꽌 ?덈Т 媛?섍쾶 異쒕젰?섎뒗 ?꾩긽???꾪솕?섍린 ?꾪빐 ???꾨컲??湲곕낯 湲瑗??ш린瑜?0.5pt???곹뼢 議곗젙?덉뒿?덈떎.
-
-### English
-- Fixed a rendering bug where secondary buttons blended into the background panels in Light Mode; button borders have been made more distinct.
-- Slightly increased base font sizes by 0.5pt across the application to compensate for the thinner default stroke width of the newly applied `Pretendard` font.
-
-## [1.5.9] - 2026-07-15
-
-### Korean
-- ?곗쿂 ?대???紐⑤뱺 ?띿뒪??諛?UI 湲瑗댁쓣 湲곗〈 `Segoe UI`?먯꽌 `Pretendard`濡??꾨㈃ 援먯껜?섏뿬 ?⑥뵮 源붾걫?섍퀬 ?쇨????덈뒗 媛?낆꽦???쒓났?섎룄濡?媛쒖꽑?덉뒿?덈떎.
-
-### English
-- Universally replaced all `Segoe UI` and `Segoe UI Variable` fonts with `Pretendard` to enhance typographic consistency and localized readability across all UI elements.
-
-## [1.5.8] - 2026-07-15
-
-### Korean
-- ?댁쟾 踰꾩쟾???꾩엯??鍮꾨룞湲??먮룞 醫낅즺 濡쒖쭅??遺?묒슜?쇰줈, ?쒕쾭媛 ?ㅽ뻾 以묒씪 ??X 踰꾪듉???꾨Ⅴ硫?醫낅즺 ?щ?瑜?臾살? ?딄퀬 怨㏓컮濡??쒕쾭媛 爰쇱졇踰꾨━??UI 踰꾧렇瑜??섏젙?덉뒿?덈떎. ?댁젣 湲곗〈泥섎읆 ?뺤긽?곸쑝濡??ъ감 ?뺤씤 ?앹뾽???쒖떆?⑸땲??
-
-### English
-- Fixed a UX bug introduced by the asynchronous shutdown logic where pressing the 'X' button while the server was running bypassed the exit confirmation dialog and initiated an immediate shutdown. The launcher now correctly asks for confirmation before terminating.
-
-## [1.5.7] - 2026-07-15
-
-### Korean
-- ?곗쿂 媛뺤젣 醫낅즺???덉긽移?紐삵븳 異⑸룎 ?쒖뿉???덈룄???묒뾽 媛쒖껜(Job Object)瑜??듯빐 ?ㅽ뻾 以묒씤 ?쒕쾭 ?꾨줈?몄뒪(`java.exe`)媛 ?덉쟾?섍쾶 ?④퍡 醫낅즺?섎룄濡??꾨줈?몄뒪 ?앸챸 二쇨린 愿由щ? ???媛뺥솕?덉뒿?덈떎.
-- ?쒕쾭 醫낅즺 以??곗쿂 X 踰꾪듉???뚮??????곗쿂 李쎌씠 諛붾줈 ?ロ엳吏 ?딄퀬 理쒕? 10珥덇컙 ?뺤긽 醫낅즺瑜??湲고븳 ???ロ엳???곗븘??醫낅즺(Graceful Shutdown) 湲곕뒫???꾩엯?덉뒿?덈떎.
-- ?щ윭 踰?醫낅즺 踰꾪듉???꾨? ??諛쒖깮?????덈뒗 UI 硫덉땄怨?以묐났 ?ㅽ뻾 ?ㅻ쪟瑜??닿껐?섍린 ?꾪빐 鍮꾨룞湲?諛⑹떇?쇰줈 援ъ“瑜??꾨㈃ 媛쒗렪?덉뒿?덈떎.
-
-### English
-- Significantly enhanced process lifecycle management by integrating Windows Job Objects; child server processes (`java.exe`) will now automatically terminate safely even if the launcher crashes or is forcefully closed.
-- Implemented graceful shutdown capabilities; when closing the launcher during server termination, the UI will now wait up to 10 seconds for the server to halt properly before gracefully exiting.
-- Overhauled the termination logic with asynchronous workflows to prevent UI freezing and duplicate execution errors caused by repeatedly pressing the stop button.
-## [1.5.6] - 2026-07-14
-
-### Korean
-- 紐⑤뱶 諛??뚮윭洹몄씤 ??뿉???쒖옉?먭? WebP ?뺤떇?쇰줈 ?ъ쭊???щ졇?????ъ쭊??蹂댁씠吏 ?딄퀬 嫄대꼫?곗뼱吏???뚮뜑留??명솚??臾몄젣瑜??몃? 蹂???쒕쾭瑜?嫄곗튂?꾨줉 ?섏뿬 ?닿껐?덉뒿?덈떎.
-
-### English
-- Fixed a rendering compatibility issue in the Content tab where project icons uploaded in WebP format were not displayed; they are now automatically converted and loaded via a proxy service.
-
-
-## [1.5.5] - 2026-07-14
-
-### Korean
-- UPnP ?ы듃?ъ썙?⑹쓽 ?곌껐 諛??뺤씤 ?쒓컙 ?쒕룄瑜??섎젮 ?묐떟???먮┛ 怨듭쑀湲곗뿉?쒕룄 ?덉젙?곸쑝濡??곌껐?섎룄濡??덉젙?깆쓣 ???媛쒖꽑?덉뒿?덈떎.
-
-### English
-- Significantly improved UPnP stability by relaxing connection and verification timeouts, allowing slower routers to properly establish port forwarding rules.
-
-
-## [1.5.4] - 2026-07-14
-
-### Korean
-- 肄섑뀗痢???紐⑤뱶 諛??뚮윭洹몄씤 ???먯꽌 ??ぉ??鍮좊Ⅴ寃??섍만 ???몃꽕???ъ쭊 濡쒕뵫???곴뎄?곸쑝濡?硫덉텛???ㅽ듃?뚰겕 ?곕뱶??踰꾧렇瑜??섏젙?덉뒿?덈떎.
-
-### English
-- Fixed a network deadlock bug where thumbnail images in the Content tab would permanently stop loading if items were browsed too quickly.
-
-
-## [1.5.3] - 2026-07-14
-
-### Korean
-- ?쒕쾭 ?ㅼ젙 ?붾㈃?먯꽌 '鍮좊Ⅸ ?ㅼ젙(?꾨━??' 湲곕뒫???쒓굅?섍퀬 '吏곸젒 ?ㅼ젙' ?붾㈃??湲곕낯?쇰줈 ?쒖떆?섎룄濡?媛쒗렪?덉뒿?덈떎.
-- ?쒕쾭 ?ㅼ젙??'?붾뱶 ?좏삎(Level Type)' ?좏깮 肄ㅻ낫諛뺤뒪瑜?異붽??섍퀬 湲곗〈 ?쒕쾭???ㅼ젙???щ컮瑜닿쾶 遺덈윭?ㅻ룄濡?媛쒖꽑?덉뒿?덈떎.
-- ?몄뼱 蹂寃?踰꾪듉???뚮윭???붾㈃ ?쒖떆媛 利됱떆 諛섏쁺?섏? ?딄퀬 ?뚮쭏 蹂寃?踰꾪듉怨?寃뱀퀜 蹂댁씠??UI 踰꾧렇瑜??닿껐?덉뒿?덈떎.
-- ?뚮쭏瑜?蹂寃쏀뻽????留덉슦?ㅻ? ?щ━湲??꾧퉴吏 踰꾪듉 ?됱긽???덉쟾 ?뚮쭏濡??⑥븘?덈뜕 ?뚮뜑留?吏??臾몄젣瑜??섏젙?덉뒿?덈떎.
-- 硫붿씤 ?붾㈃???쒕쾭 ?곹깭 ?띿뒪??"?쒕쾭 爰쇱쭚" ?? ?뚮뜑留???湲??二쇰????ㅻえ???뚮몢由?諛뺤뒪媛 ?쒖떆?섎뜕 洹몃옒??源⑥쭚 踰꾧렇瑜??꾨꼍?섍쾶 ?닿껐?덉뒿?덈떎.
-
-### English
-- Overhauled the Server Setup screen by removing the "Quick Setup (Presets)" and making the "Direct Setup" view default.
-- Added a "World Type (Level Type)" selection box to the Server Setup screen with full state-restoration for existing servers.
-- Fixed a layout overlap bug where the Language toggle button wouldn't update its UI properly and overlapped with the Theme button.
-- Fixed an issue where the Theme toggle button's color wouldn't synchronize with the new theme until hovered over.
-- Resolved a severe graphics artifact on the main server status label where WinForms transparency rendering caused a solid rectangular box around the text.
-
-## [1.5.2] - 2026-07-14
-
-?대? 鍮뚮뱶: `26.2.45.42`
-
-### Korean
-- ?쒖옉 ??媛꾪뿉?곸쑝濡??곗쿂媛 鍮꾩젙??醫낅즺?섎뜕 移섎챸???ㅻ쪟 ?섏젙 (NullReferenceException)
-- ?낅뜲?댄듃 ?덈궡 ?붾㈃("What's new")???????몄뼱 ?ㅼ젙(?쒓뎅???곸뼱)??留욎떠 ?섏삤?꾨줉 ?ㅺ뎅??吏??異붽?
-
-### English
-- Fixed a critical crash (NullReferenceException) that occurred sporadically when launching the application
-- Added multi-language support for the "What's new" release notes screen to match the user's app language setting
-
-## [1.5.1] - 2026-07-14
-
-?대? 鍮뚮뱶: `26.2.45.41`
-
-### Korean
-- ?쒕쾭 愿由??섎떒 踰꾪듉?ㅼ씠 醫곸? 李쎌뿉???섎━??UI 臾몄젣 ?섏젙 (`FlowLayoutPanel` 以꾨컮轅?諛??먮룞 ?믪씠 議곗젅 ?곸슜)
-- ?ㅽ겕 紐⑤뱶?먯꽌 ?띿뒪???낅젰李?`TextBox` ????諛쒖깮?섎뜕 諛앹? ?뚮몢由??쒓굅 諛?紐⑤뜕 ?ㅽ????곸슜
-- 李??ш린媛 蹂????`RoundedButton` ?댁쟾 ?ㅺ낸?좎씠 ?⑥븘 UI媛 源⑥???踰꾧렇 ?섏젙
-- 諛고룷?섏뿀??1.5.0 踰꾩쟾??湲곗〈 ?ъ슜?먯뿉寃??먮룞 ?낅뜲?댄듃媛 ?뺤긽?곸쑝濡??몃━嫄??섎룄濡??⑥튂 踰꾩쟾 ?곹뼢
-
-### English
-- Fixed UI layout issues where bottom buttons in the server manager were clipped in narrow windows
-- Removed the bright default 1px border on text inputs in dark mode for a modern look
-- Fixed a rendering bug where `RoundedButton` would retain its previous border when the window was resized
-- Bumped patch version to properly trigger automatic updates for existing 1.5.0 users
-
-## [1.5.0] - 2026-07-14
-
-?대? 鍮뚮뱶: `26.2.45.40`
-
-### Added
-- 諛고룷 ?꾨줈?몄뒪 媛꾩냼?붾? ?꾪빐 濡쒖뺄 鍮뚮뱶 ??GitHub Release???먮룞 ?낅줈?쒗븯??`Publish-LocalRelease.ps1` ?ㅽ겕由쏀듃 異붽?
-- 而댄뙆??吏곹썑 ?곗쿂 諛붿씠?덈━???먮룞?쇰줈 濡쒖뺄 ?몄쬆???쒕챸(Code Signing)??二쇱엯?섎뒗 ?ㅽ겕由쏀듃 異붽?
-
-### Changed
-- 紐⑤뱺 ?κ렐 UI 而⑦듃濡?`RoundedPanel`, `RoundedButton`, `RoundedProgressBar`)??`GraphicsPath` 鍮꾧?由??먯썝??留ㅻ쾲 ?앹꽦?섏? ?딄퀬 ?ъ궗??Caching)?섎룄濡??뚮뜑留?理쒖쟻??
-- ?섎뱶肄붾뵫 ?띿뒪??湲곕컲?대뜕 ?댄똻 留ㅼ묶 濡쒖쭅??`AccessibleDescription` ?띿꽦 諛??몄뼱??Key) 湲곕컲?쇰줈 由ы뙥?곕쭅?섏뿬 ?몄뼱 ?꾪솚 ???덉젙??媛뺥솕
-
-## [1.4.0] - 2026-07-14
-
-?대? 鍮뚮뱶: `26.2.45.39`
-
-### Changed
-
-- ?곗쿂 ?낅뜲?댄듃 李쎌쓽 `?섏쨷??? `吏湲??낅뜲?댄듃` 踰꾪듉??硫붿씤 ?붾㈃怨?媛숈? ?κ렐 踰꾪듉, ?뚮쭏 ?됱긽, ?몃쾭쨌?ъ빱???쒗쁽?쇰줈 ?듭씪
-- ?쒕쾭 愿由? 諛깆뾽, 肄섑뀗痢? ?뚮젅?댁뼱, 紐낅졊, ?댁??듦낵 ?ㅼ젙 ?뺤씤???⑥븘 ?덈뜕 Windows 湲곕낯 ?뚮┝李쎌쓣 MineHarbor 怨듯넻 ??붿긽?먮줈 援먯껜
-- 怨듯넻 ??붿긽?먯뿉 ?ㅽ겕쨌?쇱씠?맞룰퀬?鍮??뚮쭏, ?섎?蹂?踰≫꽣 ?꾩씠肄? ?좏깮 媛?ν븳 蹂몃Ц, 44px ?묒뾽 踰꾪듉怨?Enter쨌Esc ?ㅻ낫???숈옉 ?곸슜
-- ?꾨줈???대쫫 ?낅젰李쎌뿉 ?⑥븘 ?덈뜕 ?ㅻえ???뺤씤쨌痍⑥냼 踰꾪듉??怨듯넻 ?κ렐 踰꾪듉?쇰줈 援먯껜?섍퀬 紐⑤뱺 媛꾨떒 ??붿긽?먯쓽 踰꾪듉 ??븷蹂??됱긽 ?듭씪
-
-### Tests
-
-- Windows 湲곕낯 ?뚮┝李쎄낵 ?쒖? ?ㅻえ 踰꾪듉 ?앹꽦???ㅼ떆 異붽??섎㈃ ?ㅽ뙣?섎뒗 ?뚯뒪 ?꾩닔 寃??異붽?
-- 怨듯넻 ??붿긽?먯쓽 ?κ렐 踰꾪듉, 理쒖냼 ?믪씠, ?묎렐???대쫫, 湲곕낯 ?숈옉怨?痍⑥냼 ?숈옉 ?뚭? ?뚯뒪??異붽?
-
-## [1.3.2] - 2026-07-14
-
-?대? 鍮뚮뱶: `26.2.45.38`
-
-### Changed
-
-- ?낅뜲?댄듃 硫뷀??곗씠?곗뿉???뚯씪 ?ш린媛 ?묒닔?몄?留??뺤씤?섍퀬 ?꾩쓽??理쒖냼 ?ш린 ?쒗븳???ъ슜?섏? ?딅룄濡?蹂寃?
-- v1.3.2源뚯?留?援щ쾭???먮룞 ?낅뜲?댄듃 ?명솚???꾪빐 1MB ?ш린瑜??좎??섍퀬, v1.3.3 ?댁긽遺???ㅼ젣 而댄뙆???ш린 洹몃?濡?諛고룷?섎룄濡??꾪솚
-
-## [1.3.1] - 2026-07-14
-
-?대? 鍮뚮뱶: `26.2.45.37`
-
-### Fixed
-
-- v1.2.1 ?댄븯 ?곗쿂媛 1MB蹂대떎 ?묒븘吏?v1.3.0 ?낅뜲?댄듃 ?뚯씪???щ컮瑜댁? ?딆? 硫뷀??곗씠?곕줈 嫄곕??섎뜕 ?명솚??臾몄젣 ?섏젙
-- Java ?고??꾩쓣 ?ㅼ떆 ?댁옣?섏? ?딄퀬 理쒖냼 ?명솚 ?ш린留??좎??섎ŉ, 由대━??寃利앹뿉??湲곗〈 ?먮룞 ?낅뜲?댄듃 ?명솚?깆쓣 ?뺤씤?섎룄濡?蹂닿컯
-
-## [1.3.0] - 2026-07-14
-
-?대? 鍮뚮뱶: `26.2.45.36`
-
-### Added
-
-- 硫붿씤 ?붾㈃???몄뼱 蹂寃?踰꾪듉 ?놁뿉 ?댁쟾 寃??寃곌낵? 臾닿??섍쾶 理쒖떊 ?뺣낫瑜??ㅼ떆 議고쉶?섎뒗 ?곗쿂 ?낅뜲?댄듃 踰꾪듉 異붽?
-- ?낅뜲?댄듃 ?뺤씤 李쎌뿉 ?좏깮??踰꾩쟾留??먮룞 ?뚮┝?먯꽌 ?쒖쇅?섎뒗 `??踰꾩쟾? ?ㅼ떆 蹂댁? ?딄린` ?듭뀡 異붽?
-
-### Changed
-
-- 141MB Java 25 ?고??꾩쓣 ?ㅽ뻾 ?뚯씪?먯꽌 遺꾨━?섍퀬, ?쒕쾭媛 ?붽뎄?섎뒗 Java瑜?理쒖큹 ?ъ슜 ??怨듭떇 Eclipse Adoptium?먯꽌 寃利????대젮諛쏆븘 罹먯떆?섎룄濡?蹂寃?
-- ?낅뜲?댄듃 李쎄낵 GitHub Release??二쇱슂 蹂寃??ы빆???꾩옱 ?쒗뭹 踰꾩쟾??`CHANGELOG.md`?먯꽌 ?먮룞 ?앹꽦?섎룄濡?蹂寃?
-- 紐낅졊 釉뚮━吏??怨좎젙 JDK??鍮뚮뱶 ?꾩슜 ?섏〈?깆쑝濡??좎??섍퀬 ?곗쿂 EXE ?ы룷?⑥쓣 ?⑸웾 寃?щ줈 李⑤떒
-
-## [1.2.1] - 2026-07-14
-
-?대? 鍮뚮뱶: `26.2.45.34`
-
-### Fixed
-
-- UPnP COM ?묒뾽 ?ㅻ젅?쒕? STA濡?怨좎젙??怨듭쑀湲?寃?됯낵 留ㅽ븨 ?몄텧??媛꾪뿉???ㅽ뙣 ?꾪솕
-- UPnP 怨듭쑀湲?寃?됯낵 留ㅽ븨 ?앹꽦???④퀎?곸쑝濡??ъ떆?꾪븯怨? ?앹꽦 寃곌낵? 怨듭쑀湲?紐⑸줉 諛섏쁺 ?щ?瑜?寃利앺븯?꾨줉 媛쒖꽑
-- 留ㅽ븨 ?앹꽦 吏곹썑 ?묐떟???딄꺼???곗쿂媛 留뚮뱺 留ㅽ븨???ㅼ떆 李얠븘 ?쒕쾭 醫낅즺 ???덉쟾?섍쾶 ??젣
-- ?몃? ?묒냽 寃???쒕퉬?ㅼ쓽 ?쇱떆?곸씤 ?듭떊 ?ㅽ뙣 ?ъ떆?꾩? UPnP 泥섎━ ???ш????잛닔 ?뺣?
-
-## [1.2.0] - 2026-07-13
-
-?대? 鍮뚮뱶: `26.2.45.33`
-
-### Changed
-
-- ?쒕쾭 愿由?룸갚?끒룹퐯?먯툩쨌?뚮젅?댁뼱쨌?ㅽ듃?뚰겕쨌紐낅졊 愿由?李쎌쓣 ?댁뼱 ???곹깭?먯꽌??硫붿씤 李쎌쓣 怨꾩냽 ?ъ슜?????덈룄濡?蹂寃?
-- 媛숈? 湲곕뒫 李쎌쓽 以묐났 ?앹꽦??留됯퀬 ?대? ?대┛ 李쎌쓣 ?ㅼ떆 ?욎쑝濡?媛?몄삤?꾨줉 媛쒖꽑
-- ?쒕쾭 ?곗씠?곕? ?섏젙?섎뒗 愿由?李쎌씠 ?대젮 ?덉쓣 ??硫붿씤 ?쒕쾭 ?쒖옉쨌?ㅼ젙쨌?낃렇?덉씠?쒕? 李⑤떒???숈떆 ?묒뾽 異⑸룎 諛⑹?
-- ?ㅽ뻾 以묒씤 硫???쒕쾭? ?ы듃媛 寃뱀튂硫??ъ슜 媛?ν븳 ?ы듃濡?蹂寃쏀븷吏 ?뺤씤?섍퀬, ?숈쓽 ???ㅼ젙 ?????諛붾줈 ?ㅽ뻾
-- 硫???쒕쾭 二쇱냼 ?놁뿉 ?뚮몢由??녿뒗 蹂듭궗 湲고샇瑜?異붽????묒냽 二쇱냼瑜?諛붾줈 蹂듭궗
-- ?몃? ?묒냽쨌UPnP쨌?ы듃?ъ썙??寃???ㅽ뙣 ??硫???쒕쾭 ?곹깭瑜?`?묒냽 遺덇?`濡??쒖떆?섍퀬 ?ш????깃났 ??蹂듦뎄
-
-## [1.1.0] - 2026-07-13
-
-?대? 鍮뚮뱶: `26.2.45.32`
-
-### Changed
-
-- 紐낅졊 ?먮룞?꾩꽦 紐⑸줉?먯꽌 `Tab`쨌`Shift+Tab`?쇰줈 ?꾨낫瑜??쒗솚?섎룄濡?蹂寃?
-- ?먮룞?꾩꽦 ?꾨낫媛 ?좏깮???곹깭?먯꽌 `Enter`瑜??꾨Ⅴ硫??꾨낫瑜??곸슜?섍퀬 利됱떆 ?쒕쾭濡??꾩넚
-
-## [1.0.0] - 2026-07-13
-
-?대? 鍮뚮뱶: `26.2.45.31`
-
-### Added
-
-- 硫???쒕쾭 愿由ъ뿉 ?쒕쾭 ?대쫫 ?ъ엯???뺤씤???ы븿????젣 踰꾪듉怨?30???댁???異붽?
-- ?댁??듭뿉????젣???쒕쾭瑜?蹂듦뎄?섍굅??利됱떆 ?곴뎄 ??젣?섎뒗 愿由??붾㈃ 異붽?
-
-### Changed
-
-- ?쒗뭹 ?쒖떆 ?대쫫??`MineHarbor ??Minecraft Server Launcher`濡?蹂寃?
-- Portable EXE, ZIP, ?ㅼ튂 ?꾨줈洹몃옩怨?紐낅졊 釉뚮━吏 由대━???먯궛??`MineHarbor` ?대쫫?쇰줈 ?듭씪
-- 湲곗〈 ?곗쿂???먮룞 ?낅뜲?댄듃? `%LOCALAPPDATA%\MinecraftServerLauncher` ?쒕쾭 ?곗씠?곕? ?좎??섎뒗 ?명솚 寃쎈줈 異붽?
-- Paper/Purpur ?뚮윭洹몄씤 紐낅졊???뚮윭洹몄씤蹂꾨줈 遺꾨쪟?섍퀬 鍮좊Ⅸ 紐낅졊 媛쒖닔 ?쒖떆 ?곸뿭 媛쒖꽑
-
-### Fixed
-
-- v0.4.2媛 留뚮뱺 寃利앸맂 ?꾩떆 寃쎈줈瑜?MineHarbor ?낅뜲?댄듃 ?ㅽ뻾 ?뚯씪???댁뼱諛쏅룄濡??섏젙???대쫫 蹂寃??댄썑 ?먮룞 ?낅뜲?댄듃媛 以묐떒?섎뜕 臾몄젣 ?닿껐
-- ?꾩옱 諛??댁쟾??怨좎젙???낅뜲?댄듃 ?꾩떆 猷⑦듃 ?섏쐞 寃쎈줈留??덉슜?섍퀬 洹?諛뽰쓽 寃쎈줈??怨꾩냽 李⑤떒
-
-## [0.4.2] - 2026-07-13
-
-?대? 鍮뚮뱶: `26.2.45.30`
-
-### Added
-
-- 鍮좊Ⅸ 紐낅졊??`移댄뀒怨좊━ ??湲곕뒫 ??紐낅졊` ?쒖꽌濡??먯깋?섎뒗 3???좏깮李?
-- ?대쫫쨌?ㅻ챸쨌怨꾩링 寃쎈줈쨌?ㅼ젣 紐낅졊?대? ?④퍡 李얜뒗 寃?됯낵 `Ctrl+F`, 諛⑺뼢?? `Enter`, `Esc` ?ㅻ낫??議곗옉
-
-### Changed
-
-- ?쒓컙쨌?좎뵪쨌?쒖씠?꾩쿂??諛섎났?섎뜕 紐낅졊??`?붾뱶 ???좎뵪 ??留묒쓬/鍮?泥쒕뫁`, `?붾뱶 ???쒖씠?????됲솕濡쒖?/?ъ?/蹂댄넻/?대젮?` 援ъ“濡??듯빀
-- 鍮좊Ⅸ 紐낅졊 紐⑸줉??湲곕낯 Windows ?ㅽ겕濡ㅻ컮瑜??ㅽ겕쨌?쇱씠?맞룰퀬?鍮??뚮쭏???κ렐 ?ㅽ겕濡ㅻ컮濡?援먯껜
-- ?ㅽ겕濡ㅼ씠 ?꾩슂??紐⑸줉?먮쭔 ?먯옟?대? ?쒖떆?섍퀬 留덉슦???? ?먯옟???쒕옒洹? ?몃옓 ?대┃怨??ㅻ낫???대룞???좎?
-
-### Fixed
-
-- 鍮좊Ⅸ 紐낅졊 ?좏깮李쎌쓽 寃???쇰꺼 諛곌꼍怨??섎떒 ?좏깮쨌?リ린 踰꾪듉??移대뱶 ?됱긽 諛??ㅻⅨ履??뺣젹怨?留욎? ?딅뜕 臾몄젣 ?섏젙
-- ?쒓뎅?는룹쁺???쒖씠??寃쎈줈? ?좎뵪쨌?쒖씠??洹몃９ 媛쒖닔瑜??뺤씤?섎뒗 ?뚭? ?뚯뒪??異붽?
-
-## [0.4.1] - 2026-07-13
-
-?대? 鍮뚮뱶: `26.2.45.29`
-
-### Fixed
-
-- ?쒕쾭 愿由??붾㈃???꾩씠肄섍낵 踰덉뿭 臾멸뎄瑜??ㅼ젣 湲瑗?湲곗??쇰줈 痢≪젙??踰꾪듉 湲?먭? ?섎━嫄곕굹 留먯쨪?꾪몴濡??쒖떆?섎뜕 臾몄젣 ?섏젙
-- ?곷떒 ?ㅽ뻾 踰꾪듉????踰꾪듉???ㅼ젣 ??뿉 留욎떠 諛곗튂?섍퀬 ?꾨줈??愿由ъ쓽 湲?媛?몄삤湲?臾멸뎄瑜?媛꾧껐?섍쾶 ?듭씪
-- ?쒓뎅?는룹쁺???쒕쾭 愿由?踰꾪듉??理쒖냼 ?쒖떆 ??쓣 ?뺤씤?섎뒗 ?먮룞 ?뚭? ?뚯뒪??異붽?
-
-## [0.4.0] - 2026-07-13
-
-?대? 鍮뚮뱶: `26.2.45.28`
-
-### Added
-
-- ?쒕쾭 愿由?룻뵆?덉씠?는룻솕?댄듃由ъ뒪?맞룹썡?쑣룹젙蹂?移댄뀒怨좊━??湲곕낯 鍮좊Ⅸ 紐낅졊怨??ㅽ뻾 ???꾪뿕 ?뺤씤
-- `config/quick-commands.json`??蹂꾨룄濡?蹂댁〈?섎뒗 ?ъ슜??紐낅졊 ?쒗뵆由?異붽?쨌?섏젙쨌??젣 ?붾㈃
-- ?꾩옱 而ㅼ꽌, ?곗샂?? ?⑤씪???뚮젅?댁뼱, 紐낅졊 湲곕줉??諛섏쁺?섎뒗 125ms ?붾컮?댁뒪 濡쒖뺄 ?먮룞?꾩꽦
-- Paper/Purpur 1.13 ?댁긽?먯꽌 怨듦컻 CommandMap API濡?紐낅졊쨌蹂꾩묶쨌?ㅻ챸쨌usage쨌?뚮윭洹몄씤쨌???꾩꽦???쒓났?섎뒗 ?좏깮??Java 釉뚮━吏
-- ?ㅽ뻾蹂?256鍮꾪듃 ?좏겙, ?꾨줈???뺤씤, 猷⑦봽諛??꾩슜 ?꾩떆 ?ы듃? ?ш린 ?쒗븳 JSON Lines ?듭떊
-- 釉뚮━吏 ?ㅼ튂 ?숈쓽 湲곕낯媛? ?곹깭쨌踰꾩쟾쨌?꾨줈?좎퐳쨌諛쒓껄 紐낅졊 ?쒖떆? 寃利앸맂 ?ㅼ튂쨌?낅뜲?댄듃쨌?쒓굅
-- 釉뚮━吏 ?꾨줈?좎퐳 ?⑥쐞 ?뚯뒪?몄? ?꾩떆 Paper ?쒕쾭 紐낅졊 紐⑸줉쨌?먮룞?꾩꽦쨌?뚮젅?댁뼱쨌?ъ뿰寃??듯빀 ?뚯뒪??
-
-### Changed
-
-- 硫붿씤 ?섎떒??肄섏넄怨?鍮좊Ⅸ 紐낅졊???④퍡 ?ъ슜?????덈뒗 諛섏쓳???묒뾽 ?곸뿭?쇰줈 ?뺤옣
-- 湲곕낯 李??믪씠瑜?議곗젙??鍮좊Ⅸ 紐낅졊??異붽????ㅼ뿉??湲곗〈 踰꾪듉怨??낅젰李쎌씠 ?섎━吏 ?딅룄濡?媛쒖꽑
-- 由대━???먯궛怨?`update.json`??釉뚮━吏 JAR??踰꾩쟾, ?꾨줈?좎퐳, ?명솚 Minecraft 踰붿쐞, ?ш린? SHA-256 ?ы븿
-
-### Security
-
-- 釉뚮━吏 ?곌껐? ?몃? 二쇱냼瑜??덉슜?섏? ?딄퀬 ?몄뀡 ?좏겙??濡쒓렇??吏꾨떒 臾띠쓬???ы븿?섏? ?딆쓬
-- 釉뚮━吏??紐낅졊???ㅽ뻾?섏? ?딆쑝硫??ㅼ젣 ?꾩넚? 湲곗〈 ?쒕쾭 肄섏넄 ?낅젰 寃쎈줈留??ъ슜
-- ?곗쿂媛 愿由?湲곕줉??媛吏??뺥솗??JAR留??쒓굅?섍퀬 ?낅뜲?댄듃 ?ㅽ뙣 ???댁쟾 JAR 蹂듭썝
-
-## [0.3.3] - 2026-07-12
-
-?대? 鍮뚮뱶: `26.2.45.27`
-
-### Changed
-
-- Paper ?쒕쾭 JAR ?댁옣怨?理쒖큹 ?ㅽ뻾 ?꾩슜 怨좎젙 鍮뚮뱶 寃쎈줈瑜??쒓굅?섍퀬 怨듭떇 API 理쒖떊 鍮뚮뱶 ?ㅼ슫濡쒕뱶? SHA-256 寃利?寃쎈줈濡??듯빀
-- ???쒕쾭???먮룞 ?낅뜲?댄듃 湲곕낯媛믪쓣 ?쒖꽦?뷀븯怨?理쒖큹 ?ㅼ슫濡쒕뱶 吏곹썑 媛숈? ?뚯씪???ㅼ떆 ?뺤씤?섎뜕 以묐났 ?ㅼ슫濡쒕뱶 ?쒓굅
-- ?ㅼ젙 ?붾㈃ 肄섑뀗痢???낵 理쒖냼 李??덈퉬瑜?留욎떠 DPI 諛곗쑉???곕씪 ?섑??섎뜕 媛濡??ㅽ겕濡??쒓굅
-- ?쒓뎅?는룹쁺???묒뾽 踰꾪듉??吏㏐퀬 ?덉젙?곸씤 臾멸뎄濡??듭씪?섍퀬 ?꾩껜 ?숈옉 ?ㅻ챸? ?꾩?留먭낵 ?묎렐???ㅻ챸?쇰줈 ?좎?
-- 理쒖떊 Paper/Purpur?먯꽌 GUI 肄섏넄??留욌뒗 `--nojline --nogui` ?몄닔瑜??ъ슜?섎룄濡?媛쒖꽑
-
-### Added
-
-- 肄섏넄???쇰컲 寃쎄퀬, Java쨌?곕????명솚??寃쎄퀬, ?ㅻ쪟瑜?援щ텇?섎뒗 ?꾪꽣? ?됱긽
-- ?댁옣 Paper 由ъ냼??遺?? ?명솚??寃쎄퀬 遺꾨쪟, 踰꾩쟾蹂?肄섏넄 ?몄닔? ?ㅼ젙 ?붾㈃ ??쓣 ?뺤씤?섎뒗 ?먮룞 ?뚭? ?뚯뒪??
-
-## [0.3.2] - 2026-07-12
-
-?대? 鍮뚮뱶: `26.2.45.26`
-
-### Changed
-
-- 硫붿씤 ?붾㈃???쒕쾭 ?쒖뼱? 愿由??꾧뎄 ?곸뿭?쇰줈 ?섎늻怨??쒓컖???꾧퀎瑜?媛뺥솕
-- 二쇱슂 ?숈옉, ?쒕쾭 愿由? 諛깆뾽怨?肄섑뀗痢??붾㈃???숈씪????援듦린??肄붾뱶 ?쒕줈??踰≫꽣 ?꾩씠肄??곸슜
-- 蹂댁“ 踰꾪듉???뉗? ?뚮몢由щ? 異붽???移대뱶? 踰꾪듉??寃쎄퀎瑜??쇱씠?맞룸떎??紐⑤뱶?먯꽌 紐낇솗?섍쾶 ?쒖떆
-- ?ㅼ젙 ?붾㈃??湲곕낯 ?곗깋 肄ㅻ낫諛뺤뒪瑜??뚮쭏 ??묓삎 ?ㅻ꼫 ?쒕줈??而⑦듃濡ㅻ줈 援먯껜
-- 鍮좊Ⅸ ?ㅼ젙, 湲곕낯 ?뺣낫, ?쒕쾭 洹쒖튃 ?뱀뀡??紐낇솗??援щ텇?섍퀬 ?꾨━?뗭뿉 ?곕씪 遺덊븘?뷀븳 怨듦컙 ?먮룞 異뺤냼
-- ?좏깮???꾨━?뗭뿉 ?됱긽 ??泥댄겕 ?쒖떆瑜?異붽??섍퀬 ?ㅻ깄?력텷ava 臾멸뎄瑜?媛꾧껐?섍쾶 ?뺣━
-
-### Added
-
-- DPI 諛곗쑉怨??뚮쭏??留욎떠 吏곸젒 ?뚮뜑留곷릺??21醫?踰꾪듉 ?꾩씠肄?泥닿퀎
-
-## [0.3.1] - 2026-07-12
-
-?대? 鍮뚮뱶: `26.2.45.25`
-
-### Changed
-
-- 硫붿씤 ?묒뾽 踰꾪듉??李??덈퉬??留욊쾶 ?뺣젹?섍퀬 湲곕낯 李??믪씠瑜??ㅼ젣 肄섑뀗痢좎뿉 留욊쾶 議곗젙
-- ?쇱씠?맞룸떎??톆indows 怨좊?鍮?紐⑤뱶???띿뒪?? 寃쎄퀎?좉낵 ?곹깭 ?됱긽 ?鍮?媛쒖꽑
-- 二쇱냼 蹂듭궗? 紐낅졊 ?꾩넚 踰꾪듉???쒖꽦 ?곹깭, 濡쒕뵫 而ㅼ꽌? ?곹깭 ?덈궡瑜??ㅼ젣 ?숈옉怨??쇱튂?섎룄濡?媛쒖꽑
-- ?ㅼ젙 ?붾㈃???낅젰 ?ㅻ쪟瑜?愿???꾨뱶 ?녾낵 ?섎떒???쒖떆?섍퀬 以묐났 寃쎄퀬 李??쒓굅
-- ?ㅼ젙 ?붾㈃??遺덊븘?뷀븳 媛濡??ㅽ겕濡??쒓굅 諛??묒? ?붾㈃?먯꽌???몃줈 ?ㅽ겕濡ㅻ쭔 ?ъ슜
-- 肄섑뀗痢??ㅼ튂 ?ㅽ뙣 硫붿떆吏???ъ떆??寃쎈줈瑜??쒓났?섍퀬 以묐났 ?앹뾽 ?쒓굅
-- ?쒕쾭 愿由?紐⑸줉???꾩껜 ?ъ깮?깊븯吏 ?딄퀬 媛깆떊??源쒕묀?꾧낵 ?좏깮 ?꾩튂 ?대룞 諛⑹?
-
-### Added
-
-- F5 ?쒖옉, Shift+F5 ?덉쟾 醫낅즺, Ctrl+, ?ㅼ젙, Ctrl+K 肄섏넄 寃???⑥텞??
-- ?낅젰 ?꾨뱶? ?곹깭 ?곸뿭???묎렐???대쫫쨌?ㅻ챸, 紐낇솗??2px ?ㅻ낫???ъ빱???쒖떆
-- UX ?鍮? ?묎렐????븷怨?鍮꾪솢??踰꾪듉 而ㅼ꽌瑜??뺤씤?섎뒗 ?먮룞 ?뚭? ?뚯뒪??
-
-## [0.3.0] - 2026-07-11
-
-?대? 鍮뚮뱶: `26.2.45.24`
-
-### Added
-
-- Portable 諛?Windows ?ㅼ튂 ?꾨줈洹몃옩 諛고룷 援ъ“
-- ?ъ슜???곗씠?? Portable, ?ъ슜??吏???쒕쾭 ?곗씠???꾩튂 ?좏깮怨??곴뎄 ???
-- ?⑥씪 `version.json` 湲곕컲 ?쒗뭹 踰꾩쟾쨌鍮뚮뱶 踰덊샇 ?앹꽦
-- `update.json`, `SHA256SUMS.txt`? GitHub Actions 由대━???먮룞??
-- MIT ?쇱씠?좎뒪, 蹂댁븞 ?뺤콉, 媛쒖씤?뺣낫 ?덈궡? 湲곗뿬 臾몄꽌
-- ?곗씠???꾩튂, ?낅뜲?댄듃 硫뷀??곗씠?? ?댁떆, 援먯껜 諛??ㅼ젙 UI ?뚭? ?뚯뒪??
-
-### Changed
-
-- ?곗쿂 ?낅뜲?댄듃瑜??ъ슜???뱀씤 ?꾩뿉留??ㅽ뻾?섎룄濡?蹂寃?
-- ?ㅼ슫濡쒕뱶 ?ш린? SHA-256 寃利? 湲곗〈 EXE 諛깆뾽, ???ㅽ뻾 ?뺤씤怨?蹂듦뎄 ?덉감 蹂닿컯
-- 理쒖큹 ?ㅼ젙 ?붾㈃???묒? ?붾㈃ ?ㅽ겕濡? 怨좎젙 ???痍⑥냼 踰꾪듉, 洹쇱젒 ?낅젰 ?ㅻ쪟 ?쒖떆? 鍮꾪솢?깊솕 ?댁쑀 ?꾩?留?異붽?
-
-### Preserved
-
-- ?쒕쾭 ?꾨줈?? ?붾뱶, 諛깆뾽, 肄섑뀗痢? Java ?고??꾧낵 ?ы듃?ъ썙??UPnP 湲곗〈 ?곗씠??援ъ“
-- 湲곗〈 `Minecraft-Servers-Data` ?먮룞 媛먯? 諛?鍮꾪뙆愿??ъ슜
-
-## English
-
-Version `0.4.2` introduces a searchable three-level quick-command picker, groups world actions into clear paths such as World ??Weather ??Clear and World ??Difficulty ??Hard, and replaces native list scrollbars with theme-aware rounded controls that preserve wheel, drag, track-click, and keyboard navigation.
-
-Version `0.4.1` prevents Korean and English labels from being clipped inside server-management buttons by measuring icon and text space, aligning adjacent actions from their actual bounds, and adding regression coverage for every management label.
-
-Version `0.4.0` adds built-in and user quick commands, cursor-aware local completion, command history and safety confirmation, plus an optional loopback-only Paper/Purpur bridge for live command metadata, console tab completion, and online players. Bridge installation requires per-profile consent, verifies release metadata and SHA-256, never executes commands, and preserves user data on removal.
-
-Version `0.3.3` removes the bundled Paper server JAR, unifies first-run preparation with the verified official latest-build path, prevents duplicate downloads, fixes setup horizontal scrolling, shortens bilingual action labels, and separates compatibility notices from actionable warnings and errors.
-
-Version `0.3.2` introduces a consistent vector icon system, clearer server-control and management hierarchy, bordered secondary actions, fully themed owner-drawn combo boxes, denser setup sections, and non-color preset selection indicators.
-
-Version `0.3.1` improves responsive action layouts, light/dark/high-contrast readability, keyboard and screen-reader accessibility, inline setup validation, loading and disabled states, content error recovery, and stable server-list updates without selection flicker.
-
-Version `0.3.0` introduces reproducible Portable and installer builds, selectable persistent data storage, separate semantic product and internal build versions, approved and verified launcher updates with rollback, release automation, policy documents, and core regression tests. Existing server data structures and non-destructive Portable data discovery are preserved.
-
+- Hardened per-run UPnP ownership, external-access diagnostics, Forge/Inno Setup verification, backup extraction limits, and dangerous-command confirmation.
+
+## 이전 릴리스 요약 / Earlier release summary
+
+| 버전 | 날짜 | 한국어 | English |
+|---|---|---|---|
+| 1.5.19 | 2026-07-18 | UPnP 매핑 소유권과 외부 접속 복구, 공급망·백업 보안을 강화했습니다. | Hardened UPnP ownership and external-access recovery, plus supply-chain and backup security. |
+| 1.5.18 | 2026-07-16 | 불완전한 소켓 UPnP를 안정적인 COM 경로로 되돌리고 타이틀 바와 버튼 정렬을 수정했습니다. | Reverted incomplete socket UPnP to the stable COM path and fixed title-bar and button alignment. |
+| 1.5.17 | 2026-07-16 | 시작 중 HWND 재생성 뒤에도 DWM 타이틀 바 테마가 유지되도록 수정했습니다. | Preserved DWM title-bar theming after startup HWND recreation. |
+| 1.5.16 | 2026-07-16 | Windows 11 기본 타이틀 바를 앱 테마와 동기화하면서 스냅·DPI 동작을 유지했습니다. | Synchronized the Windows 11 native title bar with the app theme while preserving snap and DPI behavior. |
+| 1.5.15 | 2026-07-15 | 소켓 기반 UPnP, 고아 매핑 추적, 안전한 XML 파싱과 비동기 탐색을 도입했습니다. | Introduced socket-based UPnP, orphan tracking, safe XML parsing, and asynchronous discovery. |
+| 1.5.14 | 2026-07-15 | 콘텐츠의 WebP·SVG 아이콘을 호환 PNG로 변환해 표시했습니다. | Added compatible PNG conversion for WebP and SVG content icons. |
+| 1.5.13 | 2026-07-15 | 다운로드·TLS·CRLF 보안, 공인 IP 백업 서비스, 업데이트 복구 UX를 강화했습니다. | Hardened downloads, TLS, and CRLF handling, added public-IP fallbacks, and improved update recovery UX. |
+| 1.5.12 | 2026-07-15 | 업데이트 무결성, Job Object, 강제 종료 예외와 UI 비동기 처리를 개선했습니다. | Improved update integrity, Job Objects, force-stop exceptions, and asynchronous UI handling. |
+| 1.5.11 | 2026-07-15 | 프로세스 수명 주기와 업데이트 안정성을 정비하고 환경 변수 삽입과 강제 종료 교착을 수정했습니다. | Refactored process lifecycle and update stability, and fixed environment-variable injection and force-stop deadlocks. |
+| 1.5.10 | 2026-07-15 | 라이트 모드 보조 버튼 대비와 Pretendard 기본 글꼴 크기를 개선했습니다. | Improved secondary-button contrast in light mode and adjusted the Pretendard base size. |
+| 1.5.9 | 2026-07-15 | 전체 UI 글꼴을 Pretendard로 통일했습니다. | Standardized the UI font on Pretendard. |
+| 1.5.8 | 2026-07-15 | 서버 실행 중 창 닫기 확인이 건너뛰어지던 문제를 수정했습니다. | Restored exit confirmation while a server is running. |
+| 1.5.7 | 2026-07-15 | Job Object, 최대 10초 정상 종료 대기와 중복 종료 방지를 추가했습니다. | Added Job Objects, up to 10 seconds of graceful-shutdown waiting, and duplicate-stop prevention. |
+| 1.5.6 | 2026-07-14 | WebP 콘텐츠 아이콘의 프록시 변환 호환성을 수정했습니다. | Fixed proxy conversion compatibility for WebP content icons. |
+| 1.5.5 | 2026-07-14 | 느린 공유기를 위해 UPnP 연결·확인 제한 시간을 조정했습니다. | Adjusted UPnP connection and verification timeouts for slower routers. |
+| 1.5.4 | 2026-07-14 | 콘텐츠 목록을 빠르게 탐색할 때 아이콘 로딩이 멈추던 교착을 수정했습니다. | Fixed an icon-loading deadlock during rapid content browsing. |
+| 1.5.3 | 2026-07-14 | 직접 설정 중심 흐름, 월드 유형, 언어·테마 전환과 상태 표시 렌더링을 개선했습니다. | Improved direct setup, world type, language/theme switching, and status rendering. |
+| 1.5.2 | 2026-07-14 | 간헐적 시작 충돌과 업데이트 안내 언어 선택을 수정했습니다. | Fixed an intermittent startup crash and localized update notes. |
+| 1.5.1 | 2026-07-14 | 좁은 창의 관리 버튼, 다크 모드 입력 테두리와 업데이트 버전 판별을 수정했습니다. | Fixed narrow-window management buttons, dark input borders, and update version detection. |
+| 1.5.0 | 2026-07-14 | 로컬 릴리스·코드 서명 도구와 둥근 UI 성능·접근성 개선을 추가했습니다. | Added local release and code-signing tools plus rounded-UI performance and accessibility improvements. |
+| 1.4.0 | 2026-07-14 | Windows 기본 알림을 MineHarbor 공통 대화상자로 교체하고 버튼·키보드 동작을 통일했습니다. | Replaced native alerts with shared MineHarbor dialogs and standardized buttons and keyboard behavior. |
+| 1.3.2 | 2026-07-14 | 업데이트 파일 최소 크기 제약을 완화하면서 구버전 호환 크기를 유지했습니다. | Relaxed update minimum-size checks while retaining legacy compatibility sizing. |
+| 1.3.1 | 2026-07-14 | 작은 신규 런처 파일을 구버전이 거부하던 자동 업데이트 호환 문제를 수정했습니다. | Fixed old launchers rejecting smaller new update binaries. |
+| 1.3.0 | 2026-07-14 | 수동 업데이트 확인, 버전 무시, 외부 Java 다운로드와 변경 이력 기반 릴리스 노트를 추가했습니다. | Added manual update checks, version ignore, external Java downloads, and changelog-driven release notes. |
+| 1.2.1 | 2026-07-14 | UPnP COM을 STA 스레드로 고정하고 탐색·매핑 재시도와 결과 확인을 강화했습니다. | Moved UPnP COM to an STA thread and strengthened discovery, mapping retries, and verification. |
+| 1.2.0 | 2026-07-13 | 관리 창을 모델리스로 전환하고 다중 서버 포트 충돌·상태 복구를 개선했습니다. | Made management windows modeless and improved multi-server port conflicts and state recovery. |
+| 1.1.0 | 2026-07-13 | 빠른 명령 후보의 Tab·Shift+Tab·Enter 키보드 흐름을 개선했습니다. | Improved Tab, Shift+Tab, and Enter navigation for quick-command suggestions. |
+| 1.0.0 | 2026-07-13 | MineHarbor 이름, 서버 휴지통과 기존 데이터·업데이트 호환 경로를 도입했습니다. | Introduced the MineHarbor name, server trash, and legacy data/update compatibility paths. |
+| 0.4.2 | 2026-07-13 | 검색 가능한 3단계 빠른 명령 선택창과 테마 대응 스크롤을 추가했습니다. | Added a searchable three-level quick-command picker and theme-aware scrolling. |
+| 0.4.1 | 2026-07-13 | 서버 관리 버튼의 한국어·영어 글자 잘림을 수정했습니다. | Fixed Korean and English text clipping in server-management buttons. |
+| 0.4.0 | 2026-07-13 | 기본·사용자 빠른 명령과 루프백 전용 Paper/Purpur 실시간 브리지를 추가했습니다. | Added built-in and user quick commands plus an optional loopback-only Paper/Purpur live bridge. |
+| 0.3.3 | 2026-07-12 | 내장 Paper JAR을 제거하고 공식 최신 빌드·SHA-256 검증 경로로 통일했습니다. | Removed the bundled Paper JAR and standardized on verified official latest builds. |
+| 0.3.2 | 2026-07-12 | 벡터 아이콘, 테마 대응 컨트롤과 더 선명한 설정 계층을 도입했습니다. | Introduced vector icons, theme-aware controls, and a clearer setup hierarchy. |
+| 0.3.1 | 2026-07-12 | 반응형 배치, 고대비·키보드·스크린 리더 접근성과 입력 검증을 개선했습니다. | Improved responsive layout, high-contrast, keyboard and screen-reader accessibility, and validation. |
+| 0.3.0 | 2026-07-11 | 재현 가능한 Portable·설치 빌드, 데이터 위치 선택, 검증된 자동 업데이트와 릴리스 자동화를 도입했습니다. | Introduced reproducible portable/installer builds, selectable data storage, verified updates, and release automation. |

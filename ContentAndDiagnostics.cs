@@ -761,7 +761,7 @@ internal static partial class Launcher
 		}
 	}
 
-	private static string DownloadModrinthText(string url)
+	private static string DownloadModrinthText(string url)
 	{
 		Uri uri;
 		if (!Uri.TryCreate(url, UriKind.Absolute, out uri) || uri.Scheme != Uri.UriSchemeHttps || !uri.Host.Equals("api.modrinth.com", StringComparison.OrdinalIgnoreCase))
@@ -772,18 +772,19 @@ internal static partial class Launcher
 		request.Method = "GET";
 		request.UserAgent = GetLauncherIntegrationUserAgent();
 		request.Accept = "application/json";
-		request.Timeout = 20000;
-		request.ReadWriteTimeout = 20000;
-		request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-		using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-		{
-			if (response.StatusCode != HttpStatusCode.OK || response.ResponseUri == null || !response.ResponseUri.Host.Equals("api.modrinth.com", StringComparison.OrdinalIgnoreCase))
+		request.Timeout = 20000;
+		request.ReadWriteTimeout = 20000;
+		request.AllowAutoRedirect = false;
+		request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+		using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+		{
+			if (response.StatusCode != HttpStatusCode.OK || response.ResponseUri == null || response.ResponseUri.Scheme != Uri.UriSchemeHttps || !response.ResponseUri.Host.Equals("api.modrinth.com", StringComparison.OrdinalIgnoreCase) || response.ContentLength > 8388608L)
 			{
 				throw new WebException("Modrinth API가 정상 응답하지 않았습니다.");
 			}
 			using (StreamReader reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
 			{
-				return reader.ReadToEnd();
+				return ReadLimitedText(reader, 8388608);
 			}
 		}
 	}
@@ -793,12 +794,13 @@ internal static partial class Launcher
 		HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
 		request.Method = "GET";
 		request.UserAgent = GetLauncherIntegrationUserAgent();
-		request.Accept = "application/java-archive,application/octet-stream";
-		request.Timeout = 120000;
-		request.ReadWriteTimeout = 120000;
-		using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-		{
-			if (response.StatusCode != HttpStatusCode.OK || response.ResponseUri == null || !response.ResponseUri.Host.Equals("cdn.modrinth.com", StringComparison.OrdinalIgnoreCase))
+		request.Accept = "application/java-archive,application/octet-stream";
+		request.Timeout = 120000;
+		request.ReadWriteTimeout = 120000;
+		request.AllowAutoRedirect = false;
+		using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+		{
+			if (response.StatusCode != HttpStatusCode.OK || response.ResponseUri == null || response.ResponseUri.Scheme != Uri.UriSchemeHttps || !response.ResponseUri.Host.Equals("cdn.modrinth.com", StringComparison.OrdinalIgnoreCase) || response.ContentLength > expectedSize)
 			{
 				throw new WebException("Modrinth CDN이 정상 응답하지 않았습니다.");
 			}
@@ -828,9 +830,9 @@ internal static partial class Launcher
 
 	private static Image DownloadModrinthImage(string url)
 	{
-		if (url.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) || url.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
-		{
-			url = "https://wsrv.nl/?url=" + url.Replace("https://", "") + "&output=png";
+		if (url.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) || url.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+		{
+			url = "https://wsrv.nl/?url=" + Uri.EscapeDataString(url) + "&w=256&h=256&fit=inside&output=png";
 		}
 		Uri uri;
 		if (!Uri.TryCreate(url, UriKind.Absolute, out uri) || uri.Scheme != Uri.UriSchemeHttps)
@@ -846,11 +848,12 @@ internal static partial class Launcher
 		request.UserAgent = GetLauncherIntegrationUserAgent();
 		request.Accept = "image/png,image/jpeg,image/webp,image/*";
 		request.Timeout = 15000;
-		request.ReadWriteTimeout = 15000;
-		request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+		request.ReadWriteTimeout = 15000;
+		request.MaximumAutomaticRedirections = 3;
+		request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
 		using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
 		{
-			if (response.StatusCode != HttpStatusCode.OK || response.ResponseUri == null || response.ContentLength > 8388608L)
+			if (response.StatusCode != HttpStatusCode.OK || response.ResponseUri == null || response.ResponseUri.Scheme != Uri.UriSchemeHttps || response.ContentLength > 8388608L)
 			{
 				throw new WebException("Modrinth 이미지 응답을 검증하지 못했습니다.");
 			}
@@ -874,9 +877,11 @@ internal static partial class Launcher
 					buffer.Write(block, 0, read);
 				}
 				buffer.Position = 0;
-				using (Image decoded = Image.FromStream(buffer, true, true))
-				{
-					return new Bitmap(decoded);
+				using (Image decoded = Image.FromStream(buffer, true, true))
+				{
+					long pixels = checked((long)decoded.Width * (long)decoded.Height);
+					if (decoded.Width < 1 || decoded.Height < 1 || decoded.Width > 4096 || decoded.Height > 4096 || pixels > 16777216L) throw new InvalidDataException("Modrinth 아이콘 해상도가 허용 범위를 초과했습니다.");
+					return new Bitmap(decoded);
 				}
 			}
 		}
