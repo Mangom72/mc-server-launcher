@@ -34,6 +34,13 @@ dotnet build .\MineHarbor.csproj -c Release
 
 `test.ps1`은 버전·문서 일치, Portable EXE 버전, 콘텐츠 manifest와 데이터팩 실패 경로, 자동화 실행 임대, 백업 보존, 비동기 UI 종료 및 Paper/Purpur 브리지 프로토콜을 함께 검사합니다. PR과 `main` push는 `.github/workflows/ci.yml`, 태그와 수동 릴리스는 별도 `build-release.yml`에서 검증합니다.
 
+정식 릴리스가 게시되면 `build-release.yml`은 공개 자산 7종을 다시 내려받고, 직전 정식 버전의 실제 `ParseLauncherUpdateMetadata` 및 `DownloadLauncherUpdate` 루틴으로 새 EXE를 받습니다. 그 EXE의 크기·SHA-256·버전 리소스와 전체 회귀 테스트가 모두 통과해야 릴리스 작업이 성공합니다. 수동 재검증은 다음 명령을 사용합니다.
+
+```powershell
+.\scripts\Test-ReleaseArtifacts.ps1 -ArtifactsDirectory <공개-자산-폴더> -PublishedAssets
+.\scripts\Test-PublicAutoUpdate.ps1 -SourceLauncherPath <이전-MineHarbor.exe> -UpdateMetadataPath <공개-update.json> -DestinationPath <새-다운로드-경로>
+```
+
 ## 변경 원칙
 
 - `version.json`을 제품/빌드 버전의 단일 기준으로 사용합니다.
@@ -47,4 +54,4 @@ dotnet build .\MineHarbor.csproj -c Release
 
 ## English
 
-Build on Windows with PowerShell and the .NET Framework compiler. Run `scripts\Prepare-BuildResources.ps1`, `build.ps1`, and `test.ps1`; with the .NET 10 SDK installed, also run `dotnet build MineHarbor.csproj -c Release` for the SDK-style `net48` compatibility path. Inno Setup 6.7 or newer is required for installer builds. Keep `version.json` as the single version source, keep `build.ps1` and project source lists synchronized, never mutate real server/router data in tests, preserve corrupt manifests instead of overwriting them, cancel long-running UI work safely, verify downloads, and update Korean and English UI/documentation together.
+Build on Windows with PowerShell and the .NET Framework compiler. Run `scripts\Prepare-BuildResources.ps1`, `build.ps1`, and `test.ps1`; with the .NET 10 SDK installed, also run `dotnet build MineHarbor.csproj -c Release` for the SDK-style `net48` compatibility path. Inno Setup 6.7 or newer is required for installer builds. After publishing, the release workflow downloads all public assets, uses the immediately preceding stable launcher's real update parser and download routine, and runs the full regression suite against that downloaded EXE. Keep `version.json` as the single version source, keep `build.ps1` and project source lists synchronized, never mutate real server/router data in tests, preserve corrupt manifests instead of overwriting them, cancel long-running UI work safely, verify downloads, and update Korean and English UI/documentation together.

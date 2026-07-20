@@ -181,3 +181,28 @@ jobs:
           else {
             gh release create $tag $assets --title $title --notes-file $notes --latest
           }
+
+      - name: Verify published assets through the previous launcher
+        if: ${{ github.ref_type == 'tag' || inputs.publish_release == true }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $currentVersion = [Version]'${{ steps.version.outputs.product }}'
+          $currentTag = "v$currentVersion"
+          $verificationRoot = Join-Path $env:RUNNER_TEMP 'mineharbor-public-release-verification'
+          $publishedDirectory = Join-Path $verificationRoot 'published'
+          $previousDirectory = Join-Path $verificationRoot 'previous'
+          $updatedDirectory = Join-Path $verificationRoot 'updated'
+          New-Item -ItemType Directory -Path $publishedDirectory,$previousDirectory,$updatedDirectory -Force | Out-Null
+          gh release download $currentTag --dir $publishedDirectory
+          .\scripts\Test-ReleaseArtifacts.ps1 -ArtifactsDirectory $publishedDirectory -PublishedAssets
+
+          $previous = gh release list --limit 100 --json tagName,isDraft,isPrerelease | ConvertFrom-Json | Where-Object {
+            !$_.isDraft -and !$_.isPrerelease -and $_.tagName -match '^v\d+\.\d+\.\d+$' -and [Version]$_.tagName.Substring(1) -lt $currentVersion
+          } | Sort-Object { [Version]$_.tagName.Substring(1) } -Descending | Select-Object -First 1
+          if (!$previous) { throw 'A previous stable release is required for the public automatic-update verification.' }
+          gh release download $previous.tagName --pattern MineHarbor.exe --dir $previousDirectory
+          $updatedLauncher = Join-Path $updatedDirectory 'MineHarbor.exe'
+          .\scripts\Test-PublicAutoUpdate.ps1 -SourceLauncherPath (Join-Path $previousDirectory 'MineHarbor.exe') -UpdateMetadataPath (Join-Path $publishedDirectory 'update.json') -DestinationPath $updatedLauncher
+          .\test.ps1 -LauncherPath $updatedLauncher

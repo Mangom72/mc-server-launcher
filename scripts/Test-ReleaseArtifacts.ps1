@@ -1,6 +1,7 @@
 ﻿[CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$ArtifactsDirectory
+    [Parameter(Mandatory = $true)][string]$ArtifactsDirectory,
+    [switch]$PublishedAssets
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,13 +46,15 @@ $releasePrefix = "https://github.com/Mangom72/mc-server-launcher/releases/downlo
 if (![string]::Equals([string]$metadata.download_url, $releasePrefix + 'Minecraft-Server-Launcher.exe', [StringComparison]::Ordinal)) { throw 'Legacy launcher update URL lost compatibility with existing versions.' }
 if (![string]::Equals([string]$metadata.primary_download_url, $releasePrefix + 'MineHarbor.exe', [StringComparison]::Ordinal)) { throw 'MineHarbor update URL lost compatibility with existing versions.' }
 $releaseNotesPath = Join-Path $artifacts 'release-notes.md'
-if (!(Test-Path -LiteralPath $releaseNotesPath) -or (Get-Item -LiteralPath $releaseNotesPath).Length -eq 0) { throw 'Generated release notes are missing.' }
 $changelog = [IO.File]::ReadAllText((Join-Path $projectRoot 'CHANGELOG.md'), [Text.Encoding]::UTF8)
 $escapedVersion = [Regex]::Escape([string]$version.productVersion)
 $section = [Regex]::Match($changelog, "(?ms)^## \[$escapedVersion\][^\r\n]*\r?\n(?<body>.*?)(?=^## \[|\z)")
 $firstChange = @($section.Groups['body'].Value -split '\r?\n' | Where-Object { $_ -match '^\s*-\s+\S' } | Select-Object -First 1)
 if (!$section.Success -or $firstChange.Count -eq 0 -or ([string]$metadata.release_notes).IndexOf($firstChange[0].Trim(), [StringComparison]::Ordinal) -lt 0) { throw 'Launcher update notes do not match the current CHANGELOG section.' }
-if ([IO.File]::ReadAllText($releaseNotesPath, [Text.Encoding]::UTF8).IndexOf($firstChange[0].Trim(), [StringComparison]::Ordinal) -lt 0) { throw 'GitHub release notes do not match the current CHANGELOG section.' }
+if (!$PublishedAssets) {
+    if (!(Test-Path -LiteralPath $releaseNotesPath) -or (Get-Item -LiteralPath $releaseNotesPath).Length -eq 0) { throw 'Generated release notes are missing.' }
+    if ([IO.File]::ReadAllText($releaseNotesPath, [Text.Encoding]::UTF8).IndexOf($firstChange[0].Trim(), [StringComparison]::Ordinal) -lt 0) { throw 'GitHub release notes do not match the current CHANGELOG section.' }
+}
 $bridge = Join-Path $artifacts "MineHarbor-Command-Bridge-Paper-v$($version.productVersion).jar"
 if ([int]$metadata.bridge.protocol -ne 1 -or [string]$metadata.bridge.minimum_minecraft -ne '1.13' -or [string]$metadata.bridge.maximum_minecraft -ne '26.2') { throw 'Bridge compatibility metadata mismatch.' }
 if (![string]::Equals([string]$metadata.bridge.download_url, $releasePrefix + "MineHarbor-Command-Bridge-Paper-v$($version.productVersion).jar", [StringComparison]::Ordinal)) { throw 'Bridge update URL lost compatibility with existing versions.' }
@@ -84,3 +87,4 @@ $setup = Join-Path $artifacts "MineHarbor-Setup-v$($version.productVersion).exe"
 $setupVersion = (Get-Item -LiteralPath $setup).VersionInfo
 if ($setupVersion.ProductVersion.Trim() -ne [string]$version.productVersion -or $setupVersion.FileVersion.Trim() -ne [string]$version.buildNumber) { throw 'Installer version resource mismatch.' }
 Write-Host "RELEASE_ARTIFACTS_PASSED=$($names.Count)"
+if ($PublishedAssets) { Write-Host 'PUBLISHED_ASSETS_MODE_OK' }
