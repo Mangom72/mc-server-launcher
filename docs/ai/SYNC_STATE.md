@@ -3,8 +3,8 @@
 ## Codex Content, Automation, and Dashboard - 2026-07-20
 
 - **Current Version**: 1.6.0 (build 26.2.45.64)
-- **Branch**: `codex/content-scheduler-dashboard-v1.6.0`
-- **Status**: 콘텐츠 관리·서버 자동화·상태 대시보드 구현, 로컬 릴리스 검증 및 PR #8 Windows CI 완료
+- **Branch**: `codex/v1.6.0-release-state`
+- **Status**: 콘텐츠 관리·서버 자동화·상태 대시보드 구현, PR #8 병합 및 `v1.6.0` 정식 릴리스 게시 완료
 - 서버별 `.mineharbor/content-manifest.json`을 도입해 MineHarbor 관리 파일과 수동 설치 파일을 구분합니다. 플러그인·모드·데이터팩 검색, 호환성 검사, 필수 의존성 처리, 해시 검증, 설치·업데이트·일괄 업데이트·활성화 전환·복구 가능한 제거를 지원합니다.
 - 데이터팩은 Vanilla, Paper, Purpur와 직접 JAR 프로필에서 월드별 `datapacks` 폴더를 대상으로 관리합니다. ZIP 루트의 `pack.mcmeta`, `pack_format`, 경로 이탈·중복, 항목 수와 해제 크기를 설치 전에 검사합니다.
 - 서버별 `.mineharbor/automation.json`에 시작 전·종료 후 백업, 정기 백업, 예약 시작·종료·재시작·명령, 플레이어 사전 공지, 최근 결과와 다음 실행, 개수·기간·용량 보존 정책을 저장합니다. 프로세스 ID와 시작 시각을 포함한 디스크 실행 임대로 중복 실행과 비정상 종료 후 잠금 잔존을 처리합니다.
@@ -13,7 +13,8 @@
 - SDK 스타일 `net48` 프로젝트를 추가해 기존 Portable 빌드와 병행 검증하도록 했습니다. 기본 런타임의 .NET 10 전환은 프레임워크 전용 JSON API, WinForms/COM, 단일 EXE 업데이트 및 설치 호환성 검증이 끝날 때까지 보류합니다.
 - PR 및 `main` push용 일반 CI를 릴리스 워크플로와 분리했습니다. 버전·문서·소스 목록 동기화, SDK/기존 빌드, 실행·실패 경로·UI·브리지 테스트, Portable 메타데이터를 검사하며 모든 외부 Action을 전체 커밋 SHA로 고정했습니다.
 - 최종 로컬 검증: 릴리스 산출물 7종 구조·SHA-256 통과, `VERSION_CONSISTENCY_OK`, `PASSED=24`, `PORTABLE_VERSION_OK`, `PORTABLE_SMOKE_OK`, `BRIDGE_PROTOCOL_PASSED=10`, `MODERN_DIALOG_SCAN_OK`, `SECURITY_REGRESSION_SCAN_OK`. UPnP 검증은 루프백 가짜 장치와 가짜 COM만 사용했고 실제 공유기 설정은 변경하지 않았습니다.
-- GitHub PR [#8](https://github.com/Mangom72/MineHarbor/pull/8), Actions 실행 `29729415761`에서 빈 캐시 의존성 검증, .NET 10 SDK의 `net48` 빌드, 기존 Portable 빌드·테스트와 검증 산출물 업로드가 모두 통과했습니다. Paper Maven의 UI 리디렉션 문제는 공식 Artifactory 원본 URL과 기존 SHA-256을 함께 고정해 수정했습니다.
+- GitHub PR [#8](https://github.com/Mangom72/MineHarbor/pull/8)을 병합 커밋 `7e342b0`으로 `main`에 병합했습니다. 태그 `v1.6.0`의 [릴리스 워크플로](https://github.com/Mangom72/MineHarbor/actions/runs/29733089559)에서 빈 캐시 의존성 검증, .NET 10 SDK의 `net48` 빌드, 기존 Portable 빌드·테스트, 설치 파일 생성, 산출물 검증과 정식 릴리스 게시가 모두 통과했습니다. Paper Maven의 UI 리디렉션 문제는 공식 Artifactory 원본 URL과 기존 SHA-256을 함께 고정해 수정했습니다.
+- 공개 [v1.6.0 릴리스](https://github.com/Mangom72/MineHarbor/releases/tag/v1.6.0)의 7개 자산을 다시 내려받아 `SHA256SUMS.txt`와 `update.json`의 크기·SHA-256·URL을 대조했습니다. 공개 EXE로 전체 24개 테스트 그룹과 Portable·브리지·UI·보안 검증을 다시 통과했으며, 공개 `v1.5.23` 런처의 실제 자동 업데이트 루틴이 `v1.6.0`을 탐지하고 EXE를 내려받아 버전·크기·SHA-256을 검증했습니다.
 - 남은 검증은 실제 DPI/다중 모니터·제조사별 서버 설치 환경, Fabric/Forge용 TPS 브리지, Windows 코드 서명입니다.
 
 ## Codex Full Product Audit and Release - 2026-07-20

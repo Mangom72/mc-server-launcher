@@ -2,13 +2,13 @@
 
 ## 0. Current implementation state (v1.6.0)
 
-- Active development branch: `codex/content-scheduler-dashboard-v1.6.0`
+- Release-state branch: `codex/v1.6.0-release-state`
 - Version source of truth: `version.json` = 1.6.0 / build 26.2.45.64
 - New per-server state: `.mineharbor/content-manifest.json` and `.mineharbor/automation.json`
 - New user areas: installed content/Modrinth/data packs, backup schedules and commands, and a live server status dashboard
 - New service boundaries: `ContentManagementServices.cs`, `ServerAutomation.cs`, and the UI integration in `ContentManagementUi.cs` / `ServerManagementFeatures.cs`
-- CI: `.github/workflows/ci.yml` validates PRs and main separately from `.github/workflows/build-release.yml`; both build the SDK-style `net48` project and the legacy Portable path. PR #8 run `29729415761` passed both paths.
-- Local release validation passed with 24 test groups, 10 bridge protocol cases, Portable smoke/version tests, release artifact/hash verification, UI scan, and security regression scan.
+- CI: `.github/workflows/ci.yml` validates PRs and main separately from `.github/workflows/build-release.yml`; both build the SDK-style `net48` project and the legacy Portable path. PR #8 was merged as `7e342b0`, and release run `29733089559` built, tested, packaged, verified, and published `v1.6.0` successfully.
+- Local and publicly downloaded release validation passed with 24 test groups, 10 bridge protocol cases, Portable smoke/version tests, release artifact/hash verification, UI scan, and security regression scan. The public `v1.5.23` launcher update routine also detected, downloaded, and hash-verified `v1.6.0`.
 - The default runtime remains .NET Framework 4.8. `MineHarbor.csproj` is the migration bridge; do not switch to .NET 10 until updater, COM/UPnP, WinForms, installer, and Portable compatibility tests are equivalent.
 - Do not infer dashboard values. Paper/Purpur TPS/MSPT is shown only when the local bridge reports it; unsupported or disconnected values remain explicit.
 
@@ -87,7 +87,7 @@ This document was created for handoff purposes by analyzing the previous AI (Cod
 - **No Personal Identifiers**: No special privileges should be granted to `Mangom72` or any specific user in the logic (except for standard GitHub URLs).
 
 ## 10. Next Steps / Tasks to be Done
-- Keep the passed PR #8 Windows SDK/legacy build gates required when merging or extending this work.
+- Keep the PR/main Windows SDK/legacy build gates and tagged release verification required when extending this work.
 - Expand bridge command completion and TPS/MSPT metrics to Fabric/Forge if a stable server-side API is selected.
 - Prepare for Windows Code Signing (Authenticode) and validate SmartScreen reputation on signed releases.
 - Exercise 125%, 150%, and mixed-DPI multi-monitor layouts with representative long Korean and English strings.
