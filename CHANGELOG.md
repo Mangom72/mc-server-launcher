@@ -4,6 +4,26 @@
 
 Product versions follow [Semantic Versioning](https://semver.org/), while `26.2.45.xx` is a separate internal build number.
 
+## [1.7.0] - 2026-07-20
+
+### Korean
+
+- **현대형 테마 컨트롤**: 다크·라이트 팔레트를 공유하는 둥근 체크박스, 드롭다운, 탭, 목록 헤더·행과 상태 표 구분선을 추가했습니다. 고정 격자와 항상 표시되던 대시보드 스크롤을 제거하고 키보드 포커스·스크린 리더 정보를 유지했습니다.
+- **플레이어·명령 자동완성**: 플레이어 관리 화면에서 연결된 플레이어 이름을 제안하고, 멀티 서버 콘솔에서 기본 명령과 온라인 플레이어 인수를 위아래 방향키 및 Tab/Enter로 완성할 수 있습니다.
+- **외부 포트 판정 수정**: 일반 TCP 포트 검사 결과를 Minecraft 서버 확인으로 오인하지 않도록 `서버 일치 미확인` 상태를 도입했습니다. MineHarbor가 생성한 UPnP 매핑의 사후 검사만 `확인됨`으로 표시하고 외부 검사 요청의 캐시를 차단합니다.
+- **휴지통 UX 개선**: 서버 이름 입력은 휴지통으로 보내는 단계에만 유지하고 연한 서버명 예시를 표시합니다. 휴지통의 영구 삭제는 이름 재입력 대신 3초 동안 잠긴 테마 확인 창을 사용합니다.
+- **창 닫기 안전성**: 모델리스 도구 창의 제목 표시줄 X를 눌러 닫을 때 같은 위치의 메인 창 버튼이 함께 눌리지 않도록 짧은 마우스 메시지 보호 구간을 추가했습니다.
+- **검증**: 자동완성, 보수적 외부 상태, 3초 확인, 현대형 상태 표와 클릭 관통 보호 회귀를 포함한 25개 런처 테스트 그룹 및 10개 브리지 프로토콜 테스트를 통과했습니다. 네트워크 테스트는 실제 공유기 대신 루프백 가짜 UPnP 장치와 가짜 COM을 사용합니다.
+
+### English
+
+- **Modern themed controls**: Added rounded checkboxes, dropdowns, tabs, list headers/rows, and metric separators sharing the dark/light palette. Removed the fixed dashboard grid and always-enabled scrolling while preserving keyboard focus and screen-reader metadata.
+- **Player and command completion**: Player management now suggests connected player names, while managed-server consoles complete common commands and online-player arguments with Up/Down and Tab/Enter.
+- **Correct external-port classification**: Generic TCP results are now reported as `server identity unverified` instead of being treated as proof of Minecraft reachability. Only post-checks for UPnP mappings created by MineHarbor become verified, and external-check requests bypass caches.
+- **Safer Trash UX**: Exact-name input remains only when moving a server to Trash and shows a light server-name cue. Permanent deletion inside Trash now uses a themed confirmation locked for three seconds instead of asking for the name again.
+- **Close-button safety**: Added a short mouse-message guard so closing a modeless tool with its title-bar X cannot also click a main-window button underneath.
+- **Verification**: Passed 25 launcher test groups and 10 bridge protocol tests, including completion, conservative external status, timed confirmation, modern metric layout, and click-through guards. Network tests use loopback fake UPnP devices and fake COM instead of a real router.
+
 ## [1.6.0] - 2026-07-20
 
 ### Korean

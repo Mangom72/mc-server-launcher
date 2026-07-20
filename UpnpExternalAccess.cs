@@ -93,7 +93,7 @@ internal static partial class Launcher
 			return;
 		}
 
-		ReportExternalAccessStatus("기존 포트포워딩 검사 중", false);
+		ReportExternalAccessStatus("외부 TCP 응답 검사 중", false);
 		ExternalPortCheckResult initial = CheckExternalPort(serverPort, serverStopped, 3);
 		if (serverStopped.WaitOne(0))
 		{
@@ -103,8 +103,9 @@ internal static partial class Launcher
 		{
 			string address = FormatExternalAddress(initial.PublicIp, serverPort);
 			SetLauncherConnectionAddress(address);
-			Console.WriteLine("[외부 접속] 기존 포트포워딩 정상: " + address);
-			ReportExternalAccessStatus("기존 포트포워딩 정상 · " + address, false);
+			Console.WriteLine("[외부 접속] 외부 TCP 응답 확인(서버 일치 미확인) · " + address);
+			Console.WriteLine("[외부 접속] 일반 TCP 검사는 응답한 서비스가 이 Minecraft 서버인지 확인할 수 없습니다.");
+			ReportExternalAccessStatus("TCP 응답 확인 · 서버 일치 미확인 · " + address, true);
 			return;
 		}
 		if (!initial.CheckCompleted)
@@ -152,7 +153,7 @@ internal static partial class Launcher
 
 			if (attempt.Created.Count > 0 && (!attempt.UdpRequired || attempt.UdpMapped))
 			{
-				ReportExternalAccessStatus(attempt.ExternalPort == serverPort ? "UPnP 매핑 성공" : "UPnP 대체 포트 매핑 성공", false);
+				ReportExternalAccessStatus(attempt.ExternalPort == serverPort ? "UPnP 매핑 생성됨 · 외부 검증 대기" : "UPnP 대체 포트 생성됨 · 외부 검증 대기", false);
 			}
 			else if (attempt.Created.Count > 0)
 			{
@@ -179,8 +180,8 @@ internal static partial class Launcher
 				SetLauncherConnectionAddress(address);
 				Console.WriteLine("[외부 접속] UPnP 처리 후 외부 접속 성공: " + address);
 				bool completeMapping = attempt.Created.Count > 0 && (!attempt.UdpRequired || attempt.UdpMapped);
-				string successStatus = attempt.ExternalPort == serverPort ? "UPnP 매핑 성공 · " + address : "UPnP 대체 포트 매핑 성공 · " + address;
-				ReportExternalAccessStatus(completeMapping ? successStatus : attempt.Created.Count > 0 ? "UPnP TCP 매핑만 성공 · " + address : "기존 포트포워딩 정상 · " + address, !completeMapping && attempt.Created.Count > 0);
+				string successStatus = attempt.ExternalPort == serverPort ? "UPnP 매핑 확인됨 · " + address : "UPnP 대체 포트 확인됨 · " + address;
+				ReportExternalAccessStatus(completeMapping ? successStatus : attempt.Created.Count > 0 ? "UPnP TCP 응답 확인 · 서버 일치 미확인 · " + address : "TCP 응답 확인 · 서버 일치 미확인 · " + address, !completeMapping);
 			}
 			else
 			{
@@ -218,7 +219,7 @@ internal static partial class Launcher
 			ReportExternalAccessStatus("외부 접속 재검사 진행 중", false);
 			return;
 		}
-		ReportExternalAccessStatus("기존 포트포워딩 검사 중", false);
+		ReportExternalAccessStatus("외부 TCP 응답 검사 중", false);
 		try
 		{
 			using (ManualResetEvent notStopped = new ManualResetEvent(false))
@@ -228,7 +229,7 @@ internal static partial class Launcher
 				{
 					string address = FormatExternalAddress(result.PublicIp, serverPort);
 					SetLauncherConnectionAddress(address);
-					ReportExternalAccessStatus("기존 포트포워딩 정상 · " + address, false);
+					ReportExternalAccessStatus("TCP 응답 확인 · 서버 일치 미확인 · " + address, true);
 				}
 				else if (!result.CheckCompleted)
 				{
@@ -1282,13 +1283,16 @@ internal static partial class Launcher
 			suffix = status.Substring(separator);
 		}
 		if (key == "서버 포트 확인 중") return "Checking the local server port" + suffix;
-		if (key == "기존 포트포워딩 검사 중") return "Checking existing port forwarding" + suffix;
-		if (key == "기존 포트포워딩 정상") return "Existing port forwarding works" + suffix;
+		if (key == "외부 TCP 응답 검사 중") return "Checking for an external TCP response" + suffix;
+		if (key == "TCP 응답 확인") return "TCP response detected (server identity unverified)" + suffix;
 		if (key == "외부 접속 실패") return "External access failed" + suffix;
 		if (key == "UPnP 장치 검색 중") return "Searching for a UPnP gateway" + suffix;
 		if (key == "UPnP 자동 매핑 중") return "Creating a UPnP port mapping" + suffix;
-		if (key == "UPnP 매핑 성공") return "UPnP mapping succeeded" + suffix;
-		if (key == "UPnP 대체 포트 매핑 성공") return "UPnP mapping succeeded on a fallback external port" + suffix;
+		if (key == "UPnP 매핑 생성됨") return "UPnP mapping created; awaiting external verification" + suffix;
+		if (key == "UPnP 대체 포트 생성됨") return "Fallback UPnP mapping created; awaiting external verification" + suffix;
+		if (key == "UPnP 매핑 확인됨") return "UPnP mapping verified" + suffix;
+		if (key == "UPnP 대체 포트 확인됨") return "Fallback UPnP mapping verified" + suffix;
+		if (key == "UPnP TCP 응답 확인") return "UPnP TCP response detected (server identity unverified)" + suffix;
 		if (key == "UPnP TCP 매핑만 성공") return "Only the UPnP TCP mapping succeeded" + suffix;
 		if (key == "UPnP 매핑 실패") return "UPnP mapping failed" + suffix;
 		if (key == "외부 접속 재검사 중") return "Rechecking external access" + suffix;

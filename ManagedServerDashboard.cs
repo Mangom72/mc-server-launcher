@@ -197,7 +197,7 @@ internal static partial class Launcher
 			consoleButton.Click += delegate { OpenSelectedConsole(); };
 			actions.Controls.Add(consoleButton);
 			EnsureButtonContentFits(consoleButton);
-			restartBox = new CheckBox();
+			restartBox = new ModernCheckBox();
 			restartBox.Text = korean ? "충돌 시 자동 재시작" : "Restart after crash";
 			restartBox.AutoSize = true;
 			restartBox.Location = new Point(consoleButton.Right + 18, 17);
@@ -560,7 +560,7 @@ internal static partial class Launcher
 			ManagedProfileRecord profile = GetSelectedProfile();
 			if (profile == null || !EnsureProfileStopped(profile)) return;
 			ShowMineHarborDialog(this, ManagedText("서버 폴더 전체(월드, 플러그인, 모드, 설정)를 휴지통으로 옮기며 30일 동안 복구할 수 있습니다. 별도 백업 폴더는 그대로 유지됩니다. 계속하려면 다음 창에 서버 이름을 입력하세요.\r\n\r\n" + profile.Name, "The entire server folder (worlds, plugins, mods, and settings) will move to Trash and can be restored for 30 days. Separate backups are kept. Enter the server name in the next window to continue.\r\n\r\n" + profile.Name), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-			string confirmation = PromptProfileText(this, ManagedText("서버 삭제 확인", "Confirm server deletion"), string.Empty);
+			string confirmation = PromptProfileTextWithCue(this, ManagedText("서버 삭제 확인", "Confirm server deletion"), string.Empty, profile.Name);
 			if (!string.Equals(confirmation, profile.Name, StringComparison.Ordinal))
 			{
 				if (confirmation != null) ShowManagedMessage("서버 이름이 일치하지 않습니다.", "The server name does not match.", true);
@@ -1118,7 +1118,8 @@ internal static partial class Launcher
 	{
 		private readonly ManagedServerSession session;
 		private readonly RichTextBox outputBox;
-		private readonly TextBox commandBox;
+		private readonly TextBox commandBox;
+		private readonly InlineSuggestionController commandSuggestions;
 		private readonly TextBox searchBox;
 		private readonly ComboBox filterBox;
 		private readonly System.Windows.Forms.Timer timer;
@@ -1140,11 +1141,13 @@ internal static partial class Launcher
 			toolbar.Height = 44;
 			toolbar.Padding = new Padding(8, 7, 8, 5);
 			Controls.Add(toolbar);
-			searchBox = new TextBox();
-			searchBox.Dock = DockStyle.Fill;
+			searchBox = new ModernTextBox();
+			RoundedPanel searchSurface = CreateModernTextBoxSurface(searchBox, 8);
+			searchSurface.Dock = DockStyle.Fill;
+			((ModernTextBox)searchBox).CueText = ManagedText("로그 검색", "Search logs");
 			ConfigureAccessibleField(searchBox, ManagedText("콘솔 검색", "Console search"), ManagedText("표시된 콘솔 줄을 검색어로 필터링합니다.", "Filter visible console lines by search text."));
 			searchBox.TextChanged += delegate { RenderConsole(); };
-			toolbar.Controls.Add(searchBox);
+			toolbar.Controls.Add(searchSurface);
 			filterBox = new ModernComboBox();
 			filterBox.DropDownStyle = ComboBoxStyle.DropDownList;
 			filterBox.Width = 144;
@@ -1169,9 +1172,23 @@ internal static partial class Launcher
 			commandPanel.Height = 48;
 			commandPanel.Padding = new Padding(8);
 			Controls.Add(commandPanel);
-			commandBox = new TextBox();
-			commandBox.Dock = DockStyle.Fill;
+			commandBox = new ModernTextBox();
+			RoundedPanel commandSurface = CreateModernTextBoxSurface(commandBox, 8);
+			commandSurface.Dock = DockStyle.Fill;
+			((ModernTextBox)commandBox).CueText = ManagedText("명령 입력 — Tab으로 자동완성", "Enter a command — Tab to complete");
 			ConfigureAccessibleField(commandBox, ManagedText("서버 명령", "Server command"), ManagedText("실행 중인 서버에 보낼 명령을 입력합니다.", "Enter a command to send to the running server."));
+			commandSuggestions = new InlineSuggestionController(
+				this,
+				commandBox,
+				true,
+				delegate(string input)
+				{
+					string[] players;
+					lock (session.SyncRoot) players = new List<string>(session.Players).ToArray();
+					return GetManagedCommandAutoCompleteCandidates(input, players);
+				},
+				ManagedText("서버 명령 자동완성", "Server command suggestions"),
+				ManagedText("위아래 방향키로 이동하고 Tab 또는 Enter로 선택합니다.", "Use Up and Down, then Tab or Enter to select."));
 			commandBox.KeyDown += delegate(object sender, KeyEventArgs eventArgs)
 			{
 				if (eventArgs.KeyCode == Keys.Enter)
@@ -1180,7 +1197,7 @@ internal static partial class Launcher
 					eventArgs.SuppressKeyPress = true;
 				}
 			};
-			commandPanel.Controls.Add(commandBox);
+			commandPanel.Controls.Add(commandSurface);
 			Button send = MultiServerDashboardForm.NewManagedButton(ManagedText("전송", "Send"), 90, "primary");
 			send.Dock = DockStyle.Right;
 			send.Click += delegate { SendManagedCommand(); };
@@ -1191,9 +1208,10 @@ internal static partial class Launcher
 			timer.Interval = 500;
 			timer.Tick += delegate { RenderConsoleIfChanged(); };
 			timer.Start();
-			FormClosed += delegate { timer.Stop(); timer.Dispose(); };
+			FormClosed += delegate { timer.Stop(); timer.Dispose(); commandSuggestions.Dispose(); };
 			Shown += delegate { RenderConsole(); };
-			ApplySimpleDialogTheme(this);
+			ApplySimpleDialogTheme(this);
+			commandSuggestions.ApplyPalette(ThemePalette.Create(launcherForm != null && launcherForm.UsesDarkTheme));
 			ApplyCommonButtonToolTips(this);
 			ThemePalette palette = ThemePalette.Create(launcherForm != null && launcherForm.UsesDarkTheme);
 			outputBox.BackColor = palette.Console;
@@ -1453,13 +1471,16 @@ internal static partial class Launcher
 		{
 			session.Status = ManagedText("안전 종료 중", "Stopping safely");
 		}
-		Match success = Regex.Match(line, @"\[외부 접속 확인\]\s*성공:\s*외부에서\s+([^\s]+)에\s+접속|\[외부 접속\]\s*(?:기존 포트포워딩 정상|UPnP 매핑 성공|UPnP 대체 포트 매핑 성공)\s*·\s*([^\s]+)", RegexOptions.IgnoreCase);
+		Match success = Regex.Match(line, @"\[외부 접속\]\s*(?:UPnP 매핑 확인됨|UPnP 대체 포트 확인됨)\s*·\s*([^\s]+)", RegexOptions.IgnoreCase);
 		if (success.Success)
 		{
-			session.Address = success.Groups[1].Success ? success.Groups[1].Value : success.Groups[2].Value;
+			session.Address = success.Groups[1].Value;
 			session.Status = ManagedText("온라인", "Online");
 		}
-		if (IsManagedExternalAccessFailureLine(line))
+		Match unverified = Regex.Match(line, @"\[외부 접속\].*서버 일치 미확인\s*·\s*([^\s]+)", RegexOptions.IgnoreCase);
+		if (unverified.Success) session.Address = unverified.Groups[1].Value;
+
+		if (IsManagedExternalAccessFailureLine(line))
 		{
 			session.Status = ManagedText("접속 불가", "Unreachable");
 		}
@@ -1492,7 +1513,21 @@ internal static partial class Launcher
 		return false;
 	}
 
-	private static bool IsManagedSessionRunning(ManagedServerSession session)
+	private static bool IsManagedExternalAccessVerifiedLine(string line)
+	{
+		if (string.IsNullOrEmpty(line)) return false;
+		return line.IndexOf("UPnP 매핑 확인됨 ·", StringComparison.OrdinalIgnoreCase) >= 0
+			|| line.IndexOf("UPnP 대체 포트 확인됨 ·", StringComparison.OrdinalIgnoreCase) >= 0;
+	}
+
+	private static bool IsManagedExternalAccessUnverifiedLine(string line)
+	{
+		if (string.IsNullOrEmpty(line)) return false;
+		return line.IndexOf("서버 일치 미확인", StringComparison.OrdinalIgnoreCase) >= 0
+			|| line.IndexOf("외부 검증 대기", StringComparison.OrdinalIgnoreCase) >= 0;
+	}
+
+	private static bool IsManagedSessionRunning(ManagedServerSession session)
 	{
 		if (session == null || session.Process == null)
 		{

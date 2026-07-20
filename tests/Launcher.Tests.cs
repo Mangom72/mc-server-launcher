@@ -38,6 +38,7 @@ internal static class LauncherTests
 			TestDataLocations(temporary);
 			TestSetupLayoutAndValidation();
 			TestUxAccessibility();
+			TestModernUiWorkflows();
 			TestSecondaryDialogScaling(temporary);
 			TestPlayerButtonLifecycle();
 			TestModelessToolWindows();
@@ -568,6 +569,64 @@ internal static class LauncherTests
 		Pass();
 	}
 
+	private static void TestModernUiWorkflows()
+	{
+		Type checkType = launcher.GetNestedType("ModernCheckBox", BindingFlags.NonPublic);
+		Type comboType = launcher.GetNestedType("ModernComboBox", BindingFlags.NonPublic);
+		Type textType = launcher.GetNestedType("ModernTextBox", BindingFlags.NonPublic);
+		Type tabType = launcher.GetNestedType("ModernTabControl", BindingFlags.NonPublic);
+		Type listType = launcher.GetNestedType("BufferedListView", BindingFlags.NonPublic);
+		if (checkType == null || comboType == null || textType == null || tabType == null || listType == null) throw new InvalidOperationException("현대형 공통 UI 컨트롤이 누락되었습니다.");
+		using (CheckBox checkBox = (CheckBox)Activator.CreateInstance(checkType, true))
+		{
+			Equal(Cursors.Hand, checkBox.Cursor, "현대형 체크박스 포인터");
+			if (checkBox.MinimumSize.Height < 30) throw new InvalidOperationException("현대형 체크박스 터치 영역이 너무 작습니다.");
+		}
+		using (ComboBox comboBox = (ComboBox)Activator.CreateInstance(comboType, true))
+		{
+			Equal(DrawMode.OwnerDrawFixed, comboBox.DrawMode, "현대형 드롭다운 오너 드로우");
+			if (comboBox.ItemHeight < 30) throw new InvalidOperationException("현대형 드롭다운 항목 높이가 너무 작습니다.");
+		}
+		using (TextBox textBox = (TextBox)Activator.CreateInstance(textType, true))
+		{
+			textType.GetProperty("CueText").SetValue(textBox, "서버 이름 예시", null);
+			Equal("서버 이름 예시", Convert.ToString(textType.GetProperty("CueText").GetValue(textBox, null)), "입력 예시 문구");
+		}
+
+		string[] playerSuggestions = (string[])Invoke("GetPlayerNameAutoCompleteCandidates", new object[] { "Al", new string[] { "Zed", "Alice", "alex" } });
+		Equal(2, playerSuggestions.Length, "플레이어 자동완성 필터");
+		Equal("alex", playerSuggestions[0], "플레이어 자동완성 정렬");
+		string[] commandSuggestions = (string[])Invoke("GetManagedCommandAutoCompleteCandidates", new object[] { "kick A", new string[] { "Zed", "Alice", "alex" } });
+		Equal("kick alex", commandSuggestions[0], "관리 콘솔 플레이어 명령 자동완성");
+
+		DateTime start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+		Equal(3, Invoke("GetTimedConfirmationRemainingSeconds", new object[] { start, start, 3 }), "영구 삭제 확인 최초 대기");
+		Equal(2, Invoke("GetTimedConfirmationRemainingSeconds", new object[] { start, start.AddSeconds(1.2), 3 }), "영구 삭제 확인 진행 대기");
+		Equal(0, Invoke("GetTimedConfirmationRemainingSeconds", new object[] { start, start.AddSeconds(3), 3 }), "영구 삭제 확인 해제");
+
+		Type launcherFormType = launcher.GetNestedType("LauncherForm", BindingFlags.NonPublic);
+		MethodInfo guardActive = launcherFormType.GetMethod("IsOwnedWindowClickGuardActive", BindingFlags.Static | BindingFlags.NonPublic);
+		MethodInfo mouseMessage = launcherFormType.GetMethod("IsMouseClickMessage", BindingFlags.Static | BindingFlags.NonPublic);
+		Equal(true, guardActive.Invoke(null, new object[] { 100, 350 }), "보조 창 닫기 클릭 관통 보호 활성");
+		Equal(false, guardActive.Invoke(null, new object[] { 350, 350 }), "보조 창 닫기 클릭 관통 보호 만료");
+		Equal(true, mouseMessage.Invoke(null, new object[] { 0x0201 }), "마우스 클릭 메시지 식별");
+		Equal(false, mouseMessage.Invoke(null, new object[] { 0x0100 }), "키보드 메시지 비차단");
+
+		Type profileType = launcher.GetNestedType("ManagedProfileRecord", BindingFlags.NonPublic);
+		object profile = Activator.CreateInstance(profileType, true);
+		SetPublic(profile, "Name", "UI 테스트");
+		SetPublic(profile, "Directory", Path.GetTempPath());
+		Type dashboardType = launcher.GetNestedType("ServerStatusDashboardForm", BindingFlags.NonPublic);
+		using (Form dashboard = (Form)Activator.CreateInstance(dashboardType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { profile, null }, null))
+		{
+			TableLayoutPanel values = (TableLayoutPanel)GetPrivateField(dashboardType, dashboard, "values");
+			Equal("ModernMetricTable", values.GetType().Name, "대시보드 현대형 상태 표");
+			Equal(false, values.AutoScroll, "대시보드 불필요한 스크롤 제거");
+			Equal(TableLayoutPanelCellBorderStyle.None, values.CellBorderStyle, "대시보드 과한 격자 제거");
+		}
+		Pass();
+	}
+
 	private static void TestPlayerButtonLifecycle()
 	{
 		Type formType = launcher.GetNestedType("LauncherForm", BindingFlags.NonPublic);
@@ -710,11 +769,15 @@ internal static class LauncherTests
 		SetPublic(session, "Profile", profile);
 		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] 외부 접속 실패" });
 		Equal(Convert.ToString(Invoke("ManagedText", new object[] { "접속 불가", "Unreachable" })), Convert.ToString(GetField(session, "Status")), "포트포워딩 실패 상태");
-		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] UPnP 매핑 성공 · 203.0.113.10:25566" });
-		Equal(Convert.ToString(Invoke("ManagedText", new object[] { "온라인", "Online" })), Convert.ToString(GetField(session, "Status")), "외부 접속 복구 상태");
-		Equal("203.0.113.10:25566", Convert.ToString(GetField(session, "Address")), "외부 접속 주소 갱신");
-		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] UPnP 대체 포트 매핑 성공 · 203.0.113.10:25567" });
-		Equal("203.0.113.10:25567", Convert.ToString(GetField(session, "Address")), "UPnP 대체 외부 포트 주소 갱신");
+		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] TCP 응답 확인 · 서버 일치 미확인 · 203.0.113.10:25566" });
+		Equal(true, Invoke("IsManagedExternalAccessUnverifiedLine", new object[] { "[외부 접속] TCP 응답 확인 · 서버 일치 미확인 · 203.0.113.10:25566" }), "일반 TCP 응답을 미확인 상태로 분리");
+		Equal(false, Invoke("IsManagedExternalAccessVerifiedLine", new object[] { "[외부 접속] TCP 응답 확인 · 서버 일치 미확인 · 203.0.113.10:25566" }), "일반 TCP 응답의 확정 오판 방지");
+		Equal("203.0.113.10:25566", Convert.ToString(GetField(session, "Address")), "미확인 외부 주소 후보 갱신");
+		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] UPnP 매핑 확인됨 · 203.0.113.10:25566" });
+		Equal(Convert.ToString(Invoke("ManagedText", new object[] { "온라인", "Online" })), Convert.ToString(GetField(session, "Status")), "검증된 UPnP 외부 접속 복구 상태");
+		Equal(true, Invoke("IsManagedExternalAccessVerifiedLine", new object[] { "[외부 접속] UPnP 매핑 확인됨 · 203.0.113.10:25566" }), "검증 완료 UPnP 상태 식별");
+		Invoke("ParseManagedServerLine", new object[] { session, "[외부 접속] UPnP 대체 포트 확인됨 · 203.0.113.10:25567" });
+		Equal("203.0.113.10:25567", Convert.ToString(GetField(session, "Address")), "검증된 UPnP 대체 외부 포트 주소 갱신");
 		Pass();
 	}
 

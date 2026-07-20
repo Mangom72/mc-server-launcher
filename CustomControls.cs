@@ -98,52 +98,6 @@ internal static partial class Launcher
 		}
 	}
 
-	internal sealed class BufferedListView : ListView
-	{
-		public BufferedListView()
-		{
-			SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
-		}
-	}
-
-	internal sealed class ModernComboBox : ComboBox
-	{
-		public Color SelectionBackColor { get; set; }
-		public Color SelectionForeColor { get; set; }
-
-		public ModernComboBox()
-		{
-			DrawMode = DrawMode.OwnerDrawFixed;
-			DropDownStyle = ComboBoxStyle.DropDownList;
-			FlatStyle = FlatStyle.Flat;
-			ItemHeight = 24;
-			SelectionBackColor = Color.FromArgb(232, 240, 254);
-			SelectionForeColor = Color.FromArgb(25, 31, 40);
-		}
-
-		protected override void OnDrawItem(DrawItemEventArgs eventArgs)
-		{
-			if (eventArgs.Index < 0)
-			{
-				return;
-			}
-			bool selected = (eventArgs.State & DrawItemState.Selected) == DrawItemState.Selected;
-			Color back = selected ? SelectionBackColor : BackColor;
-			Color fore = selected ? SelectionForeColor : ForeColor;
-			using (SolidBrush brush = new SolidBrush(back))
-			{
-				eventArgs.Graphics.FillRectangle(brush, eventArgs.Bounds);
-			}
-			Rectangle textBounds = new Rectangle(eventArgs.Bounds.X + 8, eventArgs.Bounds.Y, Math.Max(1, eventArgs.Bounds.Width - 12), eventArgs.Bounds.Height);
-			TextRenderer.DrawText(eventArgs.Graphics, GetItemText(Items[eventArgs.Index]), Font, textBounds, fore, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-			if ((eventArgs.State & DrawItemState.Focus) == DrawItemState.Focus)
-			{
-				eventArgs.DrawFocusRectangle();
-			}
-			base.OnDrawItem(eventArgs);
-		}
-	}
-
 	internal enum ButtonIcon
 	{
 		None,

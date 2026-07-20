@@ -59,7 +59,8 @@ internal static partial class Launcher
 	{
 		foreach (Control control in parent.Controls)
 		{
-			RoundedPanel roundedPanel = control as RoundedPanel;
+			ApplyModernControlPalette(control, palette);
+			RoundedPanel roundedPanel = control as RoundedPanel;
 			if (roundedPanel != null)
 			{
 				bool surface = string.Equals(Convert.ToString(roundedPanel.Tag), "surface", StringComparison.Ordinal);
@@ -128,7 +129,8 @@ internal static partial class Launcher
 		private readonly Label authenticationWarningLabel;
 		private readonly Label playerNameLabel;
 		private readonly Label playerNameHintLabel;
-		private readonly TextBox playerNameBox;
+		private readonly TextBox playerNameBox;
+		private readonly InlineSuggestionController playerSuggestions;
 		private readonly Label actionsLabel;
 		private readonly Label statusLabel;
 		private readonly Button whitelistAddButton;
@@ -209,12 +211,13 @@ internal static partial class Launcher
 			playerNameLabel = CreateToolLabel(string.Empty, 9F, true);
 			playerNameLabel.Location = new Point(18, 13);
 			playerCard.Controls.Add(playerNameLabel);
-			playerNameBox = new TextBox();
-			playerNameBox.Location = new Point(18, 40);
-			playerNameBox.Size = new Size(300, 26);
+			playerNameBox = new ModernTextBox();
+			RoundedPanel playerNameSurface = CreateModernTextBoxSurface(playerNameBox, 9);
+			playerNameSurface.Location = new Point(18, 37);
+			playerNameSurface.Size = new Size(300, 38);
 			playerNameBox.MaxLength = 16;
 			playerNameBox.Font = new Font("Pretendard", 11F);
-			playerCard.Controls.Add(playerNameBox);
+			playerCard.Controls.Add(playerNameSurface);
 			playerNameHintLabel = CreateToolLabel(string.Empty, 8.5F, false);
 			playerNameHintLabel.Tag = "muted";
 			playerNameHintLabel.Location = new Point(336, 44);
@@ -283,14 +286,27 @@ internal static partial class Launcher
 			footer.Controls.Add(closeButton);
 			footer.Resize += delegate { closeButton.Left = Math.Max(0, footer.ClientSize.Width - closeButton.Width); };
 			root.Controls.Add(footer, 0, 5);
-			CancelButton = closeButton;
+			CancelButton = closeButton;
+			playerSuggestions = new InlineSuggestionController(
+				this,
+				playerNameBox,
+				false,
+				delegate(string input)
+				{
+					CommandBridgeSession bridge = GetActiveCommandBridge();
+					return GetPlayerNameAutoCompleteCandidates(input, bridge == null || !bridge.Connected ? new string[0] : bridge.Players);
+				},
+				ToolText("온라인 플레이어 자동완성", "Online player suggestions"),
+				ToolText("위아래 방향키로 이동하고 Tab 또는 Enter로 선택합니다.", "Use Up and Down, then Tab or Enter to select."));
 
 			ApplyLanguage();
-			ApplyToolTheme(this, palette);
+			ApplyToolTheme(this, palette);
+			playerSuggestions.ApplyPalette(palette);
 			ApplyCommonButtonToolTips(this);
 			authenticationWarningLabel.ForeColor = palette.Warning;
 			statusLabel.ForeColor = palette.Muted;
-			Shown += delegate { playerNameBox.Focus(); };
+			Shown += delegate { playerNameBox.Focus(); };
+			FormClosed += delegate { playerSuggestions.Dispose(); };
 		}
 
 		protected override void OnActivated(EventArgs eventArgs)
@@ -307,7 +323,9 @@ internal static partial class Launcher
 			authenticationWarningLabel.Text = ToolText(
 				"보안 안내 · online-mode=false에서는 다른 사람이 닉네임을 사칭할 수 있습니다. 온라인 인증을 켠 상태에서 사용하세요.",
 				"Security · With online-mode=false, another person can impersonate a username. Keep online authentication enabled.");
-			playerNameLabel.Text = ToolText("Minecraft 닉네임", "Minecraft username");
+			playerNameLabel.Text = ToolText("Minecraft 닉네임", "Minecraft username");
+			ModernTextBox modernPlayerName = playerNameBox as ModernTextBox;
+			if (modernPlayerName != null) modernPlayerName.CueText = ToolText("온라인 플레이어 이름 입력", "Enter an online player name");
 			playerNameHintLabel.Text = ToolText("영문, 숫자, 밑줄만 · 3~16자", "Letters, numbers, underscore · 3–16 characters");
 			actionsLabel.Text = ToolText("작업 선택", "Choose an action");
 			whitelistAddButton.Text = ToolText("화이트리스트 추가", "Add to whitelist");

@@ -350,13 +350,7 @@ internal static partial class Launcher
 		{
 			ServerTrashRecord record = GetSelectedTrashRecord();
 			if (record == null) return;
-			ShowMineHarborDialog(this, IsBackupKorean() ? "이 작업은 되돌릴 수 없습니다. 계속하려면 다음 창에 서버 이름을 입력하세요.\r\n\r\n" + record.ProfileName : "This cannot be undone. Enter the server name in the next window to continue.\r\n\r\n" + record.ProfileName, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-			string confirmation = PromptProfileText(this, IsBackupKorean() ? "영구 삭제 확인" : "Confirm permanent deletion", string.Empty);
-			if (!string.Equals(confirmation, record.ProfileName, StringComparison.Ordinal))
-			{
-				if (confirmation != null) ShowMineHarborDialog(this, IsBackupKorean() ? "서버 이름이 일치하지 않습니다." : "The server name does not match.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-				return;
-			}
+			if (!ShowTimedDestructiveConfirmation(this, record.ProfileName)) return;
 			PermanentlyDeleteServerTrashRecord(serversRoot, record);
 			ReloadTrash();
 		}

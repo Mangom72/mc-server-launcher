@@ -516,13 +516,14 @@ internal static partial class Launcher
 			Controls.Add(root);
 			Label heading = new Label { Text = korean ? "실시간 상태와 진단" : "Live status and diagnostics", AutoSize = true, Font = new Font("Pretendard", 17F, FontStyle.Bold), Margin = new Padding(0, 0, 0, 14) };
 			root.Controls.Add(heading, 0, 0);
-			values = new TableLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, ColumnCount = 2, RowCount = 12, CellBorderStyle = TableLayoutPanelCellBorderStyle.Single };
+			values = new ModernMetricTable { Dock = DockStyle.Fill, AutoScroll = false, ColumnCount = 2, RowCount = 12 };
 			values.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34)); values.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 66));
 			string[] names = korean ? new[] { "상태", "가동 시간", "CPU", "메모리", "Java", "접속 플레이어", "서버 용량", "월드 용량", "백업 용량", "외부 접속", "다음 예약", "TPS / MSPT" } : new[] { "Status", "Uptime", "CPU", "Memory", "Java", "Online players", "Server size", "World size", "Backup size", "External access", "Next schedule", "TPS / MSPT" };
+			for (int row = 0; row < names.Length; row++) values.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / names.Length));
 			for (int i = 0; i < names.Length; i++)
 			{
-				values.Controls.Add(new Label { Text = names[i], Dock = DockStyle.Fill, Padding = new Padding(8), AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, i);
-				values.Controls.Add(new Label { Text = ManagedText("수집 중…", "Collecting…"), Dock = DockStyle.Fill, Padding = new Padding(8), AutoSize = true, AccessibleName = names[i] }, 1, i);
+				values.Controls.Add(new Label { Text = names[i], Dock = DockStyle.Fill, Padding = new Padding(10, 6, 8, 6), AutoSize = false, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, Font = new Font(Font, FontStyle.Bold) }, 0, i);
+				values.Controls.Add(new Label { Text = ManagedText("수집 중…", "Collecting…"), Dock = DockStyle.Fill, Padding = new Padding(8, 6, 10, 6), AutoSize = false, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, AccessibleName = names[i] }, 1, i);
 			}
 			root.Controls.Add(values, 0, 1);
 			problemsBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, AccessibleName = korean ? "최근 경고와 오류" : "Recent warnings and errors" };
@@ -711,7 +712,8 @@ internal static partial class Launcher
 		{
 			string line = session.Lines[i];
 			if (IsManagedExternalAccessFailureLine(line)) return ManagedText("확인 실패", "Verification failed");
-			if (line.IndexOf("[외부 접속 확인] 성공", StringComparison.OrdinalIgnoreCase) >= 0 || line.IndexOf("UPnP 매핑 성공", StringComparison.OrdinalIgnoreCase) >= 0 || line.IndexOf("기존 포트포워딩 정상", StringComparison.OrdinalIgnoreCase) >= 0) return ManagedText("확인됨 · ", "Verified · ") + session.Address;
+			if (IsManagedExternalAccessUnverifiedLine(line)) return ManagedText("TCP 응답 · 서버 일치 미확인", "TCP response · server identity unverified");
+			if (IsManagedExternalAccessVerifiedLine(line)) return string.IsNullOrWhiteSpace(session.Address) ? ManagedText("확인됨", "Verified") : ManagedText("확인됨 · ", "Verified · ") + session.Address;
 		}
 		return ManagedText("아직 확인되지 않음", "Not verified yet");
 	}
@@ -721,7 +723,8 @@ internal static partial class Launcher
 		for (int i = lines.Length - 1; i >= 0 && i >= lines.Length - 1000; i--)
 		{
 			if (IsManagedExternalAccessFailureLine(lines[i])) return ManagedText("확인 실패", "Verification failed");
-			if (lines[i].IndexOf("[외부 접속 확인] 성공", StringComparison.OrdinalIgnoreCase) >= 0 || lines[i].IndexOf("UPnP 매핑 성공", StringComparison.OrdinalIgnoreCase) >= 0 || lines[i].IndexOf("기존 포트포워딩 정상", StringComparison.OrdinalIgnoreCase) >= 0) return ManagedText("확인됨 · ", "Verified · ") + address;
+			if (IsManagedExternalAccessUnverifiedLine(lines[i])) return ManagedText("TCP 응답 · 서버 일치 미확인", "TCP response · server identity unverified");
+			if (IsManagedExternalAccessVerifiedLine(lines[i])) return string.IsNullOrWhiteSpace(address) ? ManagedText("확인됨", "Verified") : ManagedText("확인됨 · ", "Verified · ") + address;
 		}
 		return ManagedText("아직 확인되지 않음", "Not verified yet");
 	}

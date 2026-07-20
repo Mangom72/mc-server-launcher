@@ -1003,7 +1003,8 @@ internal static partial class Launcher
 	{
 		foreach (Control control in parent.Controls)
 		{
-			if (control is Button)
+			ApplyModernControlPalette(control, palette);
+			if (control is Button)
 			{
 				Button button = control as Button;
 				string role = Convert.ToString(button.Tag);
@@ -1027,7 +1028,7 @@ internal static partial class Launcher
 					button.FlatAppearance.MouseOverBackColor = palette.AccentSoft;
 				}
 			}
-			else if (control is TextBox || control is ListView || control is DataGridView || control is NumericUpDown || control is ComboBox)
+			else if (control is TextBox || control is ListView || control is DataGridView || control is NumericUpDown || control is ComboBox || control is ModernMetricTable)
 			{
 				control.BackColor = palette.Card;
 				control.ForeColor = palette.Text;

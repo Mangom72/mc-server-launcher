@@ -674,7 +674,7 @@ internal static partial class Launcher
 			ManagedProfileRecord profile = GetSelectedProfile();
 			if (profile == null || !EnsureProfileStopped(profile)) return;
 			ShowMineHarborDialog(this, IsBackupKorean() ? "서버 폴더 전체(월드, 플러그인, 모드, 설정)를 휴지통으로 옮기며 30일 동안 복구할 수 있습니다. 별도 백업 폴더는 그대로 유지됩니다. 계속하려면 다음 창에 서버 이름을 입력하세요.\r\n\r\n" + profile.Name : "The entire server folder (worlds, plugins, mods, and settings) will move to Trash and can be restored for 30 days. Separate backups are kept. Enter the server name in the next window to continue.\r\n\r\n" + profile.Name, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-			string confirmation = PromptProfileText(this, IsBackupKorean() ? "서버 삭제 확인" : "Confirm server deletion", string.Empty);
+			string confirmation = PromptProfileTextWithCue(this, IsBackupKorean() ? "서버 삭제 확인" : "Confirm server deletion", string.Empty, profile.Name);
 			if (!string.Equals(confirmation, profile.Name, StringComparison.Ordinal))
 			{
 				if (confirmation != null) ShowProfileMessage("서버 이름이 일치하지 않습니다.", "The server name does not match.", true);
@@ -1264,6 +1264,11 @@ internal static partial class Launcher
 
 	private static string PromptProfileText(IWin32Window owner, string title, string initial)
 	{
+		return PromptProfileTextWithCue(owner, title, initial, null);
+	}
+
+	private static string PromptProfileTextWithCue(IWin32Window owner, string title, string initial, string cueText)
+	{
 		using (Form form = new Form())
 		{
 			form.Text = title;
@@ -1273,12 +1278,16 @@ internal static partial class Launcher
 			form.MaximizeBox = false;
 			form.ClientSize = new Size(420, 140);
 			form.Font = new Font("Pretendard", 11F);
-			TextBox textBox = new TextBox();
-			textBox.Location = new Point(24, 28);
-			textBox.Size = new Size(372, 30);
+			ModernTextBox textBox = new ModernTextBox();
+			RoundedPanel textSurface = CreateModernTextBoxSurface(textBox, 9);
+			textSurface.Location = new Point(24, 24);
+			textSurface.Size = new Size(372, 38);
 			textBox.MaxLength = 48;
 			textBox.Text = initial ?? string.Empty;
-			form.Controls.Add(textBox);
+			textBox.CueText = cueText ?? string.Empty;
+			textBox.AccessibleName = title;
+			textBox.AccessibleDescription = string.IsNullOrWhiteSpace(cueText) ? title : (IsBackupKorean() ? "계속하려면 예시와 같은 서버 이름을 정확히 입력하세요: " : "Enter the server name exactly as shown: ") + cueText;
+			form.Controls.Add(textSurface);
 			ThemePalette palette = ThemePalette.Create(launcherForm != null && launcherForm.UsesDarkTheme);
 			Button cancel = CreateMineHarborDialogButton(IsBackupKorean() ? "취소" : "Cancel", 96, "secondary", ButtonIcon.None, palette);
 			cancel.DialogResult = DialogResult.Cancel;

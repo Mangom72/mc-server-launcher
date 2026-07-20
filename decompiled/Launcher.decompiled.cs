@@ -490,7 +490,7 @@ internal static partial class Launcher
 				compatibility.Visible = !string.IsNullOrEmpty(compatibilityNotice);
 				dialog.Controls.Add(compatibility);
 
-				CheckBox ignoreBox = new CheckBox();
+				CheckBox ignoreBox = new ModernCheckBox();
 				ignoreBox.Name = "launcherUpdateIgnoreCheckBox";
 				ignoreBox.Text = korean ? "이 버전은 다시 보지 않기" : "Don't show this version again";
 				ignoreBox.ForeColor = textColor;
@@ -3838,6 +3838,8 @@ internal static partial class Launcher
 		httpWebRequest.UserAgent = GetLauncherIntegrationUserAgent();
 		httpWebRequest.Timeout = 15000;
 		httpWebRequest.ReadWriteTimeout = 15000;
+		httpWebRequest.CachePolicy = new System.Net.Cache.RequestCachePolicy(System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
+		httpWebRequest.Headers[HttpRequestHeader.CacheControl] = "no-cache, no-store";
 		httpWebRequest.AllowAutoRedirect = false;
 		httpWebRequest.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
 		using (HttpWebResponse httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse())

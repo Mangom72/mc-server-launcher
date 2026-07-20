@@ -65,7 +65,7 @@ internal static partial class Launcher
 			heading.TextAlign = ContentAlignment.MiddleLeft;
 			root.Controls.Add(heading, 0, 0);
 
-			tabs = new TabControl();
+			tabs = new ModernTabControl();
 			tabs.Dock = DockStyle.Fill;
 			tabs.TabPages.Add(BuildInstalledPage(korean));
 			tabs.TabPages.Add(BuildSearchPage(korean));
@@ -183,7 +183,7 @@ internal static partial class Launcher
 			searchBox.Margin = new Padding(0, 8, 8, 8);
 			searchBox.KeyDown += delegate(object sender, KeyEventArgs eventArgs) { if (eventArgs.KeyCode == Keys.Enter) { ObserveContentTask(SearchAsync()); eventArgs.SuppressKeyPress = true; } };
 			filters.Controls.Add(searchBox, 0, 0);
-			kindBox = new ComboBox();
+			kindBox = new ModernComboBox();
 			kindBox.DropDownStyle = ComboBoxStyle.DropDownList;
 			kindBox.Dock = DockStyle.Fill;
 			kindBox.Margin = new Padding(0, 8, 8, 8);
@@ -192,7 +192,7 @@ internal static partial class Launcher
 			kindBox.SelectedIndex = GetContentFolderName(options.ServerType) == null ? 1 : 0;
 			kindBox.SelectedIndexChanged += delegate { UpdateWorldChoices(); };
 			filters.Controls.Add(kindBox, 1, 0);
-			worldBox = new ComboBox();
+			worldBox = new ModernComboBox();
 			worldBox.DropDownStyle = ComboBoxStyle.DropDownList;
 			worldBox.Dock = DockStyle.Fill;
 			worldBox.Margin = new Padding(0, 8, 8, 8);

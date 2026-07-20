@@ -1432,7 +1432,7 @@ internal static partial class Launcher
 
 
 
-	private sealed partial class LauncherForm : Form
+	private sealed partial class LauncherForm : Form, IMessageFilter
 
 	{
 
@@ -1505,6 +1505,8 @@ internal static partial class Launcher
 		private readonly Dictionary<string, Form> modelessToolWindows = new Dictionary<string, Form>(StringComparer.Ordinal);
 
 		private readonly HashSet<string> modelessToolsBlockingServerChanges = new HashSet<string>(StringComparer.Ordinal);
+		private int ownedWindowClickGuardUntilTick;
+		private bool clickFilterInstalled;
 
 		private readonly ConcurrentQueue<string> consoleQueue = new ConcurrentQueue<string>();
 
@@ -1553,6 +1555,14 @@ internal static partial class Launcher
 		{
 
 			ApplyLauncherWindowIcon(this);
+			Application.AddMessageFilter(this);
+			clickFilterInstalled = true;
+			Disposed += delegate
+			{
+				if (!clickFilterInstalled) return;
+				Application.RemoveMessageFilter(this);
+				clickFilterInstalled = false;
+			};
 			this.HandleCreated += (s, e) => TitleBarDwm.ApplyTheme(this, ThemePalette.Create(darkTheme).Window, ThemePalette.Create(darkTheme).Text, ThemePalette.Create(darkTheme).Border);
 
 			string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -2363,7 +2373,7 @@ internal static partial class Launcher
 
 			consoleToolbar.Controls.Add(consoleFilterBox);
 
-			consoleWrapBox = new CheckBox();
+			consoleWrapBox = new ModernCheckBox();
 
 			Localize(consoleWrapBox, "Console.Wrap");
 
@@ -3911,6 +3921,31 @@ internal static partial class Launcher
 
 
 
+		private static bool IsOwnedWindowClickGuardActive(int nowTick, int untilTick)
+		{
+			return unchecked(untilTick - nowTick) > 0;
+		}
+
+		private static bool IsMouseClickMessage(int message)
+		{
+			return message >= 0x0201 && message <= 0x0209;
+		}
+
+		[System.Runtime.InteropServices.DllImport("user32.dll")]
+		private static extern bool IsChild(IntPtr parentHandle, IntPtr childHandle);
+
+		private void ArmOwnedWindowClickGuard()
+		{
+			ownedWindowClickGuardUntilTick = unchecked(Environment.TickCount + 350);
+		}
+
+		public bool PreFilterMessage(ref Message message)
+		{
+			if (!IsMouseClickMessage(message.Msg) || !IsOwnedWindowClickGuardActive(Environment.TickCount, ownedWindowClickGuardUntilTick) || IsDisposed || !IsHandleCreated) return false;
+			if (message.HWnd != Handle && !IsChild(Handle, message.HWnd)) return false;
+			return true;
+		}
+
 		private void ShowModelessToolWindow(string key, Func<Form> factory, bool blocksServerChanges, Action onClosed)
 
 		{
@@ -3952,6 +3987,10 @@ internal static partial class Launcher
 			modelessToolWindows[key] = form;
 
 			if (blocksServerChanges) modelessToolsBlockingServerChanges.Add(key);
+			form.FormClosing += delegate(object sender, FormClosingEventArgs eventArgs)
+			{
+				if (eventArgs.CloseReason == CloseReason.UserClosing) ArmOwnedWindowClickGuard();
+			};
 
 			form.FormClosed += delegate
 
@@ -5098,6 +5137,7 @@ internal static partial class Launcher
 
 			{
 
+				ApplyModernControlPalette(control, palette);
 				RoundedPanel roundedPanel = control as RoundedPanel;
 
 				if (roundedPanel != null)
@@ -6693,7 +6733,7 @@ internal static partial class Launcher
 
 		{
 
-			CheckBox box = new CheckBox();
+			CheckBox box = new ModernCheckBox();
 
 			box.Text = text;
 
@@ -6738,6 +6778,7 @@ internal static partial class Launcher
 
 			{
 
+				ApplyModernControlPalette(control, palette);
 				if (control is RoundedPresetButton)
 
 				{

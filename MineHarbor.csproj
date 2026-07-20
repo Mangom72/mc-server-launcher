@@ -30,6 +30,7 @@
     <Compile Include="ThemePalette.cs" />
     <Compile Include="Localization.cs" />
     <Compile Include="CustomControls.cs" />
+    <Compile Include="ModernUiControls.cs" />
     <Compile Include="RoundedProgressBar.cs" />
     <Compile Include="ModernLauncherGui.cs" />
     <Compile Include="ModernDialogs.cs" />

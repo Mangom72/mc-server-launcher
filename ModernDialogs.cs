@@ -69,6 +69,100 @@ internal static partial class Launcher
 		return button;
 	}
 
+	private static bool ShowTimedDestructiveConfirmation(IWin32Window owner, string itemName)
+	{
+		bool dark = ResolveMineHarborDialogDarkTheme(owner);
+		using (TimedDestructiveConfirmDialog dialog = new TimedDestructiveConfirmDialog(itemName, dark))
+		{
+			return owner == null ? dialog.ShowDialog() == DialogResult.OK : dialog.ShowDialog(owner) == DialogResult.OK;
+		}
+	}
+
+	private static int GetTimedConfirmationRemainingSeconds(DateTime startedUtc, DateTime nowUtc, int delaySeconds)
+	{
+		if (delaySeconds <= 0) return 0;
+		double elapsed = Math.Max(0.0, (nowUtc.ToUniversalTime() - startedUtc.ToUniversalTime()).TotalSeconds);
+		return Math.Max(0, (int)Math.Ceiling(delaySeconds - elapsed));
+	}
+
+	private sealed class TimedDestructiveConfirmDialog : Form
+	{
+		private const int ConfirmationDelaySeconds = 3;
+		private readonly bool korean;
+		private readonly Button deleteButton;
+		private readonly System.Windows.Forms.Timer countdownTimer;
+		private DateTime startedUtc;
+
+		public TimedDestructiveConfirmDialog(string itemName, bool dark)
+		{
+			korean = string.Equals(Localization.CurrentLanguage, Localization.Korean, StringComparison.OrdinalIgnoreCase);
+			ThemePalette palette = ThemePalette.Create(dark);
+			ApplyLauncherWindowIcon(this);
+			Text = korean ? "영구 삭제 확인" : "Confirm permanent deletion";
+			StartPosition = FormStartPosition.CenterParent;
+			FormBorderStyle = FormBorderStyle.FixedDialog;
+			MinimizeBox = false;
+			MaximizeBox = false;
+			ShowInTaskbar = false;
+			ClientSize = new Size(580, 250);
+			MinimumSize = Size;
+			MaximumSize = Size;
+			Font = new Font("Pretendard", 11F);
+			BackColor = palette.Window;
+			ForeColor = palette.Text;
+			AutoScaleMode = AutoScaleMode.Dpi;
+
+			Label heading = new Label
+			{
+				Text = korean ? "이 서버를 완전히 삭제할까요?" : "Delete this server permanently?",
+				Location = new Point(28, 24),
+				Size = new Size(524, 34),
+				Font = new Font("Pretendard", 17F, FontStyle.Bold),
+				ForeColor = palette.Text,
+				AutoEllipsis = true
+			};
+			Controls.Add(heading);
+
+			Label description = new Label
+			{
+				Text = (korean ? "되돌릴 수 없습니다. 내용을 확인하는 동안 삭제 버튼이 잠시 잠깁니다.\r\n서버: " : "This cannot be undone. The delete button is briefly locked for review.\r\nServer: ") + (itemName ?? string.Empty),
+				Location = new Point(30, 70),
+				Size = new Size(520, 78),
+				ForeColor = palette.Muted,
+				AutoEllipsis = false
+			};
+			Controls.Add(description);
+
+			Button cancelButton = CreateMineHarborDialogButton(korean ? "취소" : "Cancel", 104, "secondary", ButtonIcon.None, palette);
+			cancelButton.Location = new Point(306, 180);
+			cancelButton.DialogResult = DialogResult.Cancel;
+			Controls.Add(cancelButton);
+
+			deleteButton = CreateMineHarborDialogButton(string.Empty, 150, "danger", ButtonIcon.Trash, palette);
+			deleteButton.Location = new Point(418, 180);
+			deleteButton.DialogResult = DialogResult.OK;
+			deleteButton.Enabled = false;
+			deleteButton.AccessibleDescription = korean ? "3초 후 사용할 수 있습니다." : "Available after three seconds.";
+			Controls.Add(deleteButton);
+			AcceptButton = deleteButton;
+			CancelButton = cancelButton;
+
+			countdownTimer = new System.Windows.Forms.Timer { Interval = 100 };
+			countdownTimer.Tick += delegate { UpdateCountdown(); };
+			Shown += delegate { startedUtc = DateTime.UtcNow; UpdateCountdown(); countdownTimer.Start(); };
+			FormClosed += delegate { countdownTimer.Stop(); countdownTimer.Dispose(); };
+		}
+
+		private void UpdateCountdown()
+		{
+			int remaining = GetTimedConfirmationRemainingSeconds(startedUtc, DateTime.UtcNow, ConfirmationDelaySeconds);
+			deleteButton.Text = remaining > 0 ? (korean ? "영구 삭제 (" : "Delete forever (") + remaining + ")" : (korean ? "영구 삭제" : "Delete forever");
+			deleteButton.AccessibleName = deleteButton.Text;
+			deleteButton.Enabled = remaining == 0;
+			if (remaining == 0) countdownTimer.Stop();
+		}
+	}
+
 	private sealed class MineHarborMessageDialog : Form
 	{
 		private readonly MessageBoxButtons buttonKind;

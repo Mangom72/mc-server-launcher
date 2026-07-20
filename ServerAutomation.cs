@@ -306,8 +306,8 @@ internal static partial class Launcher
 			root.Controls.Add(jobList, 0, 1);
 
 			FlowLayoutPanel policy = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Padding = new Padding(0, 10, 0, 4) };
-			beforeStartBox = new CheckBox { AutoSize = true, Text = korean ? "시작 전 백업" : "Backup before start", Margin = new Padding(0, 8, 18, 0) };
-			afterStopBox = new CheckBox { AutoSize = true, Text = korean ? "종료 후 백업" : "Backup after stop", Margin = new Padding(0, 8, 18, 0) };
+			beforeStartBox = new ModernCheckBox { AutoSize = true, Text = korean ? "시작 전 백업" : "Backup before start", Margin = new Padding(0, 8, 18, 0) };
+			afterStopBox = new ModernCheckBox { AutoSize = true, Text = korean ? "종료 후 백업" : "Backup after stop", Margin = new Padding(0, 8, 18, 0) };
 			countBox = AddAutomationNumber(policy, korean ? "보존 개수" : "Keep count", 1, 200, 10);
 			daysBox = AddAutomationNumber(policy, korean ? "보존 일수" : "Keep days", 1, 3650, 30);
 			sizeBox = AddAutomationNumber(policy, korean ? "최대 용량(GB)" : "Maximum size (GB)", 1, 10240, 20);
@@ -460,14 +460,14 @@ internal static partial class Launcher
 			root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 			Controls.Add(root);
 			nameBox = AddAutomationField(root, 0, korean ? "이름" : "Name") as TextBox;
-			actionBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+			actionBox = new ModernComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
 			actionBox.Items.AddRange(korean ? new object[] { "백업", "시작", "종료", "재시작", "명령" } : new object[] { "Backup", "Start", "Stop", "Restart", "Command" }); AddAutomationControl(root, 1, korean ? "작업" : "Action", actionBox);
-			scheduleBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList }; scheduleBox.Items.AddRange(korean ? new object[] { "반복 간격", "매일" } : new object[] { "Interval", "Daily" }); AddAutomationControl(root, 2, korean ? "일정 방식" : "Schedule", scheduleBox);
+			scheduleBox = new ModernComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList }; scheduleBox.Items.AddRange(korean ? new object[] { "반복 간격", "매일" } : new object[] { "Interval", "Daily" }); AddAutomationControl(root, 2, korean ? "일정 방식" : "Schedule", scheduleBox);
 			intervalBox = new NumericUpDown { Dock = DockStyle.Left, Width = 150, Minimum = 1, Maximum = 525600, Value = 60 }; AddAutomationControl(root, 3, korean ? "반복 간격(분)" : "Interval (minutes)", intervalBox);
 			timeBox = AddAutomationField(root, 4, korean ? "매일 시각(HH:mm)" : "Daily time (HH:mm)") as TextBox;
 			warningBox = new NumericUpDown { Dock = DockStyle.Left, Width = 150, Minimum = 0, Maximum = 3600, Value = 60 }; AddAutomationControl(root, 5, korean ? "사전 공지(초)" : "Warning (seconds)", warningBox);
 			commandBox = AddAutomationField(root, 6, korean ? "명령" : "Command") as TextBox;
-			enabledBox = new CheckBox { AutoSize = true, Checked = true, Text = korean ? "사용" : "Enabled" }; root.Controls.Add(enabledBox, 1, 7);
+			enabledBox = new ModernCheckBox { AutoSize = true, Checked = true, Text = korean ? "사용" : "Enabled" }; root.Controls.Add(enabledBox, 1, 7);
 			FlowLayoutPanel actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, AutoSize = true };
 			Button save = MultiServerDashboardForm.NewManagedButton(korean ? "저장" : "Save", 96, "primary"); Button cancel = MultiServerDashboardForm.NewManagedButton(korean ? "취소" : "Cancel", 96, "secondary");
 			save.Click += delegate { SaveJob(); }; cancel.DialogResult = DialogResult.Cancel; actions.Controls.Add(save); actions.Controls.Add(cancel); root.Controls.Add(actions, 1, 8);

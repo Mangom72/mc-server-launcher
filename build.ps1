@@ -29,6 +29,7 @@ $sources = @(
     'ThemePalette.cs',
     'Localization.cs',
     'CustomControls.cs',
+	'ModernUiControls.cs',
     'RoundedProgressBar.cs',
     'ModernLauncherGui.cs',
 	'ModernDialogs.cs',
