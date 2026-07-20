@@ -1603,9 +1603,9 @@ internal static partial class Launcher
 
 			StartPosition = FormStartPosition.CenterScreen;
 
-			MinimumSize = new Size(940, 720);
+			MinimumSize = new Size(940, 800);
 
-			Size = new Size(1120, 760);
+			Size = new Size(1120, 840);
 
 			FormBorderStyle = FormBorderStyle.Sizable;
 
@@ -1622,6 +1622,7 @@ internal static partial class Launcher
 			consoleTimer.Tick += delegate { FlushConsoleQueue(); };
 
 			consoleTimer.Start();
+			InitializeMainAutomation();
 
 
 
@@ -1637,7 +1638,7 @@ internal static partial class Launcher
 
 			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
 
-			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 322F));
+			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 400F));
 
 			root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66F));
 
@@ -1969,7 +1970,7 @@ internal static partial class Launcher
 
 			startButton.Margin = new Padding(6, 5, 6, 5);
 
-			startButton.Click += delegate { StartWorkflow(); };
+			startButton.Click += delegate { StartWorkflowWithAutomationBackup(); };
 
 			primaryActions.Controls.Add(startButton, 0, 0);
 
@@ -2059,17 +2060,18 @@ internal static partial class Launcher
 
 			toolActions.Location = new Point(18, 238);
 
-			toolActions.Size = new Size(card.ClientSize.Width - 36, 54);
+			toolActions.Size = new Size(card.ClientSize.Width - 36, 108);
 
 			toolActions.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
-			toolActions.ColumnCount = 6;
+			toolActions.ColumnCount = 4;
 
-			toolActions.RowCount = 1;
+			toolActions.RowCount = 2;
 
-			for (int column = 0; column < 6; column++) toolActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16.6667F));
+			for (int column = 0; column < 4; column++) toolActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
 
-			toolActions.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+			toolActions.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+			toolActions.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
 
 			card.Controls.Add(toolActions);
 
@@ -2159,7 +2161,7 @@ internal static partial class Launcher
 
 			networkButton.Click += delegate { RunUiAction(OpenNetworkTools); };
 
-			toolActions.Controls.Add(networkButton, 4, 0);
+			toolActions.Controls.Add(networkButton, 0, 1);
 
 			diagnosticsButton = CreateButton(Localization.T("Button.Diagnostics"), 110);
 
@@ -2175,7 +2177,25 @@ internal static partial class Launcher
 
 			diagnosticsButton.Click += delegate { CreateDiagnostics(); };
 
-			toolActions.Controls.Add(diagnosticsButton, 5, 0);
+			toolActions.Controls.Add(diagnosticsButton, 1, 1);
+
+			mainScheduleButton = CreateButton(Localization.T("Button.Schedules"), 110);
+			SetButtonIcon(mainScheduleButton, ButtonIcon.Backup);
+			Localize(mainScheduleButton, "Button.Schedules");
+			mainScheduleButton.Tag = "secondary";
+			mainScheduleButton.Dock = DockStyle.Fill;
+			mainScheduleButton.Margin = new Padding(6, 5, 6, 5);
+			mainScheduleButton.Click += delegate { RunUiAction(OpenMainAutomationManager); };
+			toolActions.Controls.Add(mainScheduleButton, 2, 1);
+
+			mainDashboardButton = CreateButton(Localization.T("Button.Dashboard"), 110);
+			SetButtonIcon(mainDashboardButton, ButtonIcon.Diagnostics);
+			Localize(mainDashboardButton, "Button.Dashboard");
+			mainDashboardButton.Tag = "secondary";
+			mainDashboardButton.Dock = DockStyle.Fill;
+			mainDashboardButton.Margin = new Padding(6, 5, 6, 5);
+			mainDashboardButton.Click += delegate { RunUiAction(OpenMainStatusDashboard); };
+			toolActions.Controls.Add(mainDashboardButton, 3, 1);
 
 			Label featureList = new Label();
 
@@ -2185,7 +2205,7 @@ internal static partial class Launcher
 
 			featureList.AutoSize = false;
 
-			featureList.Location = new Point(26, 278);
+			featureList.Location = new Point(26, 348);
 
 			featureList.Size = new Size(740, 22);
 
@@ -2431,7 +2451,7 @@ internal static partial class Launcher
 
 			FormClosing += OnLauncherClosing;
 
-			FormClosed += delegate { consoleTimer.Stop(); };
+			FormClosed += delegate { consoleTimer.Stop(); DisposeMainAutomation(); };
 
 			Shown += delegate { BeginInvoke((MethodInvoker)BeginStartupInitialization); };
 
@@ -2463,7 +2483,7 @@ internal static partial class Launcher
 
 			{
 
-				StartWorkflow();
+				StartWorkflowWithAutomationBackup();
 
 				return true;
 
@@ -2851,7 +2871,7 @@ internal static partial class Launcher
 
 			SetLoadingState(Localization.CurrentLanguage == Localization.Korean ? "런처 업데이트를 확인하고 있습니다…" : "Checking launcher updates…", true, -1);
 
-			Thread worker = new Thread((ThreadStart)delegate
+			Task.Run(delegate
 
 			{
 
@@ -2981,12 +3001,6 @@ internal static partial class Launcher
 
 			});
 
-			worker.IsBackground = true;
-
-			worker.Name = "런처 시작 준비";
-
-			worker.Start();
-
 		}
 
 
@@ -3012,6 +3026,8 @@ internal static partial class Launcher
 			networkButton.Enabled = enabled;
 
 			diagnosticsButton.Enabled = enabled;
+			if (mainScheduleButton != null) mainScheduleButton.Enabled = enabled;
+			if (mainDashboardButton != null) mainDashboardButton.Enabled = enabled;
 
 			playersButton.Enabled = enabled && serverRunning;
 
@@ -3041,7 +3057,7 @@ internal static partial class Launcher
 
 			SetLoadingState(Localization.CurrentLanguage == Localization.Korean ? "런처 최신 버전을 새로 확인하고 있습니다…" : "Checking for the latest launcher again…", true, -1);
 
-			Thread worker = new Thread((ThreadStart)delegate
+			Task.Run(delegate
 
 			{
 
@@ -3116,12 +3132,6 @@ internal static partial class Launcher
 				}
 
 			});
-
-			worker.IsBackground = true;
-
-			worker.Name = "런처 업데이트 수동 확인";
-
-			worker.Start();
 
 		}
 
@@ -3255,7 +3265,7 @@ internal static partial class Launcher
 
 			SetLoadingState(Localization.CurrentLanguage == Localization.Korean ? "서버 실행 준비를 시작합니다…" : "Preparing to start the server…", true, -1);
 
-			Thread worker = new Thread((ThreadStart)delegate
+			Task.Run(delegate
 
 			{
 
@@ -3302,12 +3312,6 @@ internal static partial class Launcher
 				}
 
 			});
-
-			worker.IsBackground = true;
-
-			worker.Name = Localization.T("Thread.Start");
-
-			worker.Start();
 
 		}
 
@@ -3432,6 +3436,8 @@ internal static partial class Launcher
 				}
 
 			}
+
+			HandleMainWorkflowFinishedAutomation(exitCode, canceled);
 
 			if (closeAfterStop)
 
@@ -4105,7 +4111,7 @@ internal static partial class Launcher
 
 			}
 
-			ShowModelessToolWindow("content", delegate { return new ContentManagerForm(options); }, !serverRunning && !workflowRunning, null);
+			ShowModelessToolWindow("content", delegate { return new UnifiedContentManagerForm(options); }, !serverRunning && !workflowRunning, null);
 
 		}
 

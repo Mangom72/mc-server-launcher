@@ -12,6 +12,10 @@
 
 명령 브리지는 루프백 주소에만 바인딩된 런처 리스너, 실행마다 새로 생성되는 256비트 토큰, 프로필·프로토콜 확인, JSON Lines 크기와 후보 개수 제한을 사용합니다. 브리지는 서버 명령을 실행하지 않으며 외부 네트워크 포트를 열지 않습니다. 세션 파일이나 토큰이 로그·진단 묶음·취약점 제보에 포함되지 않게 해 주세요.
 
+플러그인과 모드는 서버에서 코드를 실행할 수 있으므로 신뢰하는 프로젝트만 설치해야 합니다. MineHarbor는 Modrinth CDN·크기·SHA-512/SHA-1, Minecraft 버전·로더와 필수 의존성을 확인하지만 제3자 콘텐츠 자체의 안전성을 보증하지 않습니다. 데이터팩 ZIP은 루트 `pack.mcmeta`, 경로 이탈, 중복 항목, 항목 수와 해제 크기를 검사합니다. 관리 콘텐츠 제거는 서버 내부 휴지통으로 이동하며 수동 파일은 manifest에서 명확히 구분합니다.
+
+`.mineharbor/content-manifest.json`과 `.mineharbor/automation.json`은 크기·스키마·경로·중복을 검증하고 원자적으로 교체합니다. 손상된 설정은 자동으로 덮어쓰지 않습니다. 예약 명령은 줄바꿈과 제어 문자를 거부하고, 예약 작업은 임대 상태를 저장해 중복 실행을 막습니다. 자동화 파일을 편집할 수 있는 사용자는 서버 콘솔 명령을 예약할 수 있으므로 서버 폴더의 Windows 권한을 신뢰할 수 있는 계정으로 제한해 주세요.
+
 ## Supported versions
 
 Security fixes target the latest stable release. Please verify whether an issue still reproduces on the latest release before reporting it.
@@ -19,3 +23,7 @@ Security fixes target the latest stable release. Please verify whether an issue 
 Report sensitive vulnerabilities through a [private GitHub Security Advisory](https://github.com/Mangom72/MineHarbor/security/advisories/new), not a public issue. Do not include worlds, account data, public IP addresses, router credentials, tokens, or unredacted logs.
 
 The command bridge uses a loopback-only launcher listener, a fresh 256-bit token per run, profile and protocol validation, and bounded JSON Lines messages and suggestions. It never executes server commands or opens an external network port. Do not include bridge session files or tokens in reports.
+
+Plugins and mods can execute code in the server process, so install only trusted projects. MineHarbor validates the Modrinth CDN, declared size, SHA-512/SHA-1, game version, loader, and required dependencies, but cannot guarantee third-party content safety. Data-pack ZIPs are checked for a root `pack.mcmeta`, path traversal, duplicate entries, entry count, and expanded size. Managed removals move files into server-local trash, and manually installed files remain clearly distinguished.
+
+`.mineharbor/content-manifest.json` and `.mineharbor/automation.json` are bounded, schema/path/duplicate validated, and atomically replaced; corrupt files are not silently overwritten. Scheduled commands reject line breaks and control characters, and execution leases prevent duplicate jobs. Anyone who can edit a server's automation file can schedule console commands, so restrict Windows permissions on server directories to trusted accounts.

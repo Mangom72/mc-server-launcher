@@ -15,6 +15,9 @@ public final class BridgeProtocolTest {
         Map<String, Object> roundTrip = BridgeProtocol.parseObject(BridgeProtocol.json(BridgeProtocol.object("type", "pong", "id", "p1", "protocol", 1)));
         equal("pong", BridgeProtocol.string(roundTrip, "type"), "JSON 왕복");
         equal(1, BridgeProtocol.integer(roundTrip, "protocol"), "프로토콜 정수");
+		Map<String, Object> metrics = BridgeProtocol.parseObject(BridgeProtocol.json(BridgeProtocol.object("type", "metrics-update", "id", "m1", "supported", true, "tps1", 19.95, "mspt", 12.5)));
+		equal("true", BridgeProtocol.string(metrics, "supported"), "지표 지원 상태");
+		equal("19.95", BridgeProtocol.string(metrics, "tps1"), "TPS 소수 JSON 왕복");
         expectFailure(() -> BridgeProtocol.parseObject("not-json"), "잘못된 JSON 차단");
         expectFailure(() -> BridgeProtocol.parseObject("{} trailing"), "뒤따르는 데이터 차단");
         expectFailure(() -> BridgeProtocol.parseObject(new String(new char[BridgeProtocol.MAXIMUM_LINE_LENGTH + 1]).replace('\0', 'x')), "요청 크기 제한");

@@ -1,5 +1,20 @@
 ﻿# AI Agent Synchronization State
 
+## Codex Content, Automation, and Dashboard - 2026-07-20
+
+- **Current Version**: 1.6.0 (build 26.2.45.64)
+- **Branch**: `codex/content-scheduler-dashboard-v1.6.0`
+- **Status**: 콘텐츠 관리·서버 자동화·상태 대시보드 구현과 로컬 릴리스 검증 완료, PR 및 원격 CI 게시 준비
+- 서버별 `.mineharbor/content-manifest.json`을 도입해 MineHarbor 관리 파일과 수동 설치 파일을 구분합니다. 플러그인·모드·데이터팩 검색, 호환성 검사, 필수 의존성 처리, 해시 검증, 설치·업데이트·일괄 업데이트·활성화 전환·복구 가능한 제거를 지원합니다.
+- 데이터팩은 Vanilla, Paper, Purpur와 직접 JAR 프로필에서 월드별 `datapacks` 폴더를 대상으로 관리합니다. ZIP 루트의 `pack.mcmeta`, `pack_format`, 경로 이탈·중복, 항목 수와 해제 크기를 설치 전에 검사합니다.
+- 서버별 `.mineharbor/automation.json`에 시작 전·종료 후 백업, 정기 백업, 예약 시작·종료·재시작·명령, 플레이어 사전 공지, 최근 결과와 다음 실행, 개수·기간·용량 보존 정책을 저장합니다. 프로세스 ID와 시작 시각을 포함한 디스크 실행 임대로 중복 실행과 비정상 종료 후 잠금 잔존을 처리합니다.
+- 통합 서버 대시보드는 상태·가동 시간·CPU·메모리·Java·플레이어·서버/월드/백업 크기·최근 경고/오류·외부 접속·다음 작업을 보여 줍니다. Paper/Purpur 브리지는 TPS/MSPT를 주기적으로 전송하고, 얻을 수 없는 값은 추정하지 않고 지원되지 않음으로 표시합니다.
+- 콘텐츠·일정·백업·대시보드 화면을 서버 관리에서 분리하고 다크/라이트 테마, DPI 재배치, 키보드 접근, 접근성 이름, 진행률과 취소를 적용했습니다. 폼 종료 후 비동기 UI 콜백은 취소 토큰과 폐기 상태 검사로 차단합니다.
+- SDK 스타일 `net48` 프로젝트를 추가해 기존 Portable 빌드와 병행 검증하도록 했습니다. 기본 런타임의 .NET 10 전환은 프레임워크 전용 JSON API, WinForms/COM, 단일 EXE 업데이트 및 설치 호환성 검증이 끝날 때까지 보류합니다.
+- PR 및 `main` push용 일반 CI를 릴리스 워크플로와 분리했습니다. 버전·문서·소스 목록 동기화, SDK/기존 빌드, 실행·실패 경로·UI·브리지 테스트, Portable 메타데이터를 검사하며 모든 외부 Action을 전체 커밋 SHA로 고정했습니다.
+- 최종 로컬 검증: 릴리스 산출물 7종 구조·SHA-256 통과, `VERSION_CONSISTENCY_OK`, `PASSED=24`, `PORTABLE_VERSION_OK`, `PORTABLE_SMOKE_OK`, `BRIDGE_PROTOCOL_PASSED=10`, `MODERN_DIALOG_SCAN_OK`, `SECURITY_REGRESSION_SCAN_OK`. UPnP 검증은 루프백 가짜 장치와 가짜 COM만 사용했고 실제 공유기 설정은 변경하지 않았습니다.
+- 남은 검증은 GitHub Windows CI의 SDK 스타일 빌드, 실제 DPI/다중 모니터·제조사별 서버 설치 환경, Fabric/Forge용 TPS 브리지, Windows 코드 서명입니다.
+
 ## Codex Full Product Audit and Release - 2026-07-20
 
 - **Current Version**: 1.5.23 (build 26.2.45.63)

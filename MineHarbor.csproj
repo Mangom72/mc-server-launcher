@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>MineHarbor</AssemblyName>
+    <RootNamespace>MineHarbor</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ApplicationIcon>launcher-icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="decompiled\Launcher.decompiled.cs" />
+    <Compile Include="ChildProcessTracker.cs" />
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="StorageConfiguration.cs" />
+    <Compile Include="ThemePalette.cs" />
+    <Compile Include="Localization.cs" />
+    <Compile Include="CustomControls.cs" />
+    <Compile Include="RoundedProgressBar.cs" />
+    <Compile Include="ModernLauncherGui.cs" />
+    <Compile Include="ModernDialogs.cs" />
+    <Compile Include="RuntimeCompatibility.cs" />
+    <Compile Include="UpnpExternalAccess.cs" />
+    <Compile Include="BackupAndProfileTools.cs" />
+    <Compile Include="ContentAndDiagnostics.cs" />
+    <Compile Include="ContentManagementServices.cs" />
+    <Compile Include="ContentManagementUi.cs" />
+    <Compile Include="ServerAutomation.cs" />
+    <Compile Include="ServerManagementFeatures.cs" />
+    <Compile Include="ManagedServerDashboard.cs" />
+    <Compile Include="ServerTrash.cs" />
+    <Compile Include="NetworkAndPlayerTools.cs" />
+    <Compile Include="QuickCommandsAndBridge.cs" />
+    <Compile Include="QuickCommandUi.cs" />
+    <Compile Include="QuickCommandPickerUi.cs" />
+    <Compile Include="UpnpCore.cs" />
+    <Compile Include="obj\GeneratedVersionInfo.cs" />
+  </ItemGroup>
+
+  <Target Name="GenerateMineHarborVersion" BeforeTargets="CoreCompile">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\scripts\Generate-VersionInfo.ps1&quot;" />
+  </Target>
+</Project>

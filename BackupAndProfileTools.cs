@@ -884,6 +884,9 @@ internal static partial class Launcher
 			return false;
 		}
 		string first = relativeDirectory.Split(new char[2] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries)[0];
+		string normalized = relativeDirectory.Replace('\\', '/').Trim('/');
+		if (normalized.StartsWith(".mineharbor/content-backups", StringComparison.OrdinalIgnoreCase)
+			|| normalized.StartsWith(".mineharbor/content-trash", StringComparison.OrdinalIgnoreCase)) return true;
 		return string.Equals(first, "server-backups", StringComparison.OrdinalIgnoreCase)
 			|| string.Equals(first, "server-jar-backups", StringComparison.OrdinalIgnoreCase)
 			|| string.Equals(first, "configuration-backups", StringComparison.OrdinalIgnoreCase)
@@ -1080,22 +1083,14 @@ internal static partial class Launcher
 			ExtractComprehensiveBackup(backupPath, staging);
 			VerifyComprehensiveBackup(backupPath, staging);
 			Directory.Move(fullServer, previous);
-			string previousBackups = Path.Combine(previous, "server-backups");
-			string stagingBackups = Path.Combine(staging, "server-backups");
-			if (Directory.Exists(previousBackups))
-			{
-				Directory.Move(previousBackups, stagingBackups);
-			}
+			MoveRestorePreservedDirectories(previous, staging);
 			try
 			{
 				Directory.Move(staging, fullServer);
 			}
 			catch
 			{
-				if (Directory.Exists(stagingBackups) && !Directory.Exists(previousBackups))
-				{
-					Directory.Move(stagingBackups, previousBackups);
-				}
+				MoveRestorePreservedDirectories(staging, previous);
 				Directory.Move(previous, fullServer);
 				throw;
 			}
@@ -1122,6 +1117,24 @@ internal static partial class Launcher
 			{
 				Directory.Delete(staging, true);
 			}
+		}
+	}
+
+	private static void MoveRestorePreservedDirectories(string sourceRoot, string destinationRoot)
+	{
+		string[] relativeDirectories =
+		{
+			"server-backups", "server-jar-backups", "configuration-backups", "content-backups", "diagnostics", "logs", "cache",
+			Path.Combine(".mineharbor", "content-backups"), Path.Combine(".mineharbor", "content-trash")
+		};
+		for (int i = 0; i < relativeDirectories.Length; i++)
+		{
+			string source = Path.Combine(sourceRoot, relativeDirectories[i]);
+			string destination = Path.Combine(destinationRoot, relativeDirectories[i]);
+			if (!Directory.Exists(source)) continue;
+			Directory.CreateDirectory(Path.GetDirectoryName(destination));
+			if (Directory.Exists(destination)) Directory.Delete(destination, true);
+			Directory.Move(source, destination);
 		}
 	}
 

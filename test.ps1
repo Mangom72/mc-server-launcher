@@ -11,6 +11,7 @@ if ([string]::IsNullOrWhiteSpace($LauncherPath)) {
 }
 $launcher = [IO.Path]::GetFullPath($LauncherPath)
 if (!(Test-Path -LiteralPath $launcher)) { throw "Launcher not found: $launcher" }
+& (Join-Path $projectRoot 'scripts\Test-VersionConsistency.ps1') -LauncherPath $launcher
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $testOutput = Join-Path $projectRoot 'obj\Launcher.Tests.exe'
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $testOutput) | Out-Null

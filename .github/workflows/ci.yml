@@ -1,0 +1,61 @@
+name: Continuous integration
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  windows-build-and-test:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Verify version and documentation consistency
+        shell: pwsh
+        run: .\scripts\Test-VersionConsistency.ps1
+
+      - name: Prepare pinned build dependencies
+        shell: pwsh
+        run: .\scripts\Prepare-BuildResources.ps1
+
+      - name: Verify SDK-style migration build
+        shell: pwsh
+        run: dotnet build .\MineHarbor.csproj --configuration Release -p:TreatWarningsAsErrors=true
+
+      - name: Build portable application and command bridge
+        shell: pwsh
+        run: .\build.ps1 -OutputDirectory .\artifacts\ci -SkipDependencyDownload
+
+      - name: Run executable, failure-path, UI, and bridge tests
+        shell: pwsh
+        run: .\test.ps1 -LauncherPath .\artifacts\ci\MineHarbor.exe
+
+      - name: Verify built version metadata
+        shell: pwsh
+        run: .\scripts\Test-VersionConsistency.ps1 -LauncherPath .\artifacts\ci\MineHarbor.exe
+
+      - name: Upload verified portable artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mineharbor-ci-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            artifacts\ci\MineHarbor.exe
+            artifacts\ci\MineHarbor-Portable-*.zip
+            artifacts\ci\MineHarbor-Command-Bridge-Paper-*.jar

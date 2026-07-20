@@ -24,7 +24,7 @@ internal static partial class Launcher
 		public int MemoryGb;
 	}
 
-	private sealed class ManagedServerSession
+	private sealed class ManagedServerSession
 	{
 		public readonly object SyncRoot = new object();
 		public ManagedProfileRecord Profile;
@@ -33,9 +33,16 @@ internal static partial class Launcher
 		public string Address;
 		public DateTime StartedUtc;
 		public bool StopRequested;
-		public bool RestartEnabled;
+		public bool RestartEnabled;
+		public bool ScheduledRestartRequested;
 		public int ChildPid = -1;
-		public long ChildStartTime = -1;
+		public long ChildStartTime = -1;
+		public bool MetricsAvailable;
+		public double Tps1;
+		public double Tps5;
+		public double Tps15;
+		public double Mspt;
+		public DateTime MetricsReceivedUtc;
 		public readonly List<string> Lines = new List<string>();
 		public readonly HashSet<string> Players = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		public readonly Queue<DateTime> CrashTimes = new Queue<DateTime>();
@@ -44,7 +51,12 @@ internal static partial class Launcher
 		{
 			lock (SyncRoot)
 			{
-				Lines.Add(line ?? string.Empty);
+				if ((line ?? string.Empty).StartsWith("[MineHarbor Metrics]", StringComparison.OrdinalIgnoreCase))
+				{
+					ParseManagedServerLine(this, line ?? string.Empty);
+					return;
+				}
+				Lines.Add(line ?? string.Empty);
 				if (Lines.Count > 8000)
 				{
 					Lines.RemoveRange(0, 1000);
@@ -62,7 +74,7 @@ internal static partial class Launcher
 		}
 	}
 
-	private sealed class MultiServerDashboardForm : Form
+	private sealed partial class MultiServerDashboardForm : Form
 	{
 		private readonly string serversRoot;
 		private readonly bool mainServerBusy;
@@ -234,10 +246,11 @@ internal static partial class Launcher
 			EnsureButtonContentFits(trashButton);
 			activateButton = NewManagedButton(korean ? "기본 서버로" : "Set active", 116, "secondary");
 			ApplyButtonIcon(activateButton, ButtonIcon.Check);
-			activateButton.Click += delegate { ActivateSelected(); };
-			profileActions.Controls.Add(activateButton);
-			EnsureButtonContentFits(activateButton);
-			refreshButton = NewManagedButton(korean ? "새로고침" : "Refresh", 100, "secondary");
+			activateButton.Click += delegate { ActivateSelected(); };
+			profileActions.Controls.Add(activateButton);
+			EnsureButtonContentFits(activateButton);
+			InitializeManagementFeatures(profileActions, korean);
+			refreshButton = NewManagedButton(korean ? "새로고침" : "Refresh", 100, "secondary");
 			ApplyButtonIcon(refreshButton, ButtonIcon.Refresh);
 			refreshButton.Click += delegate { ReloadProfiles(); };
 			profileActions.Controls.Add(refreshButton);
@@ -245,11 +258,11 @@ internal static partial class Launcher
 
 			refreshTimer = new System.Windows.Forms.Timer();
 			refreshTimer.Interval = 1000;
-			refreshTimer.Tick += delegate { RenderProfiles(); };
+			refreshTimer.Tick += delegate { RenderProfiles(); ProcessAutomationTimerTick(); };
 			refreshTimer.Start();
 			Shown += delegate { ReloadProfiles(); };
 			FormClosing += OnDashboardClosing;
-			FormClosed += delegate { refreshTimer.Stop(); refreshTimer.Dispose(); serverListToolTip.Dispose(); };
+			FormClosed += delegate { refreshTimer.Stop(); refreshTimer.Dispose(); serverListToolTip.Dispose(); DisposeManagementFeatures(); };
 			ApplySimpleDialogTheme(this);
 			ConfigureAccessibleField(serverList, korean ? "서버 목록" : "Server list", korean ? "상태, 버전, 포트와 접속 주소를 확인하고 서버를 선택합니다." : "Review status, version, port, and address, then select a server.");
 			ApplyCommonButtonToolTips(this);
@@ -609,7 +622,7 @@ internal static partial class Launcher
 			ManagedProfileRecord profile = GetSelectedProfile();
 			if (profile != null)
 			{
-				StartSession(profile, false);
+				StartSessionWithPreBackup(profile, false);
 			}
 		}
 
@@ -754,7 +767,8 @@ internal static partial class Launcher
 			{
 				session.Status = session.StopRequested || exitCode == 0 ? ManagedText("꺼짐", "Stopped") : ManagedText("충돌", "Crashed");
 				session.Players.Clear();
-				restart = !session.StopRequested && exitCode != 0 && session.RestartEnabled;
+				restart = session.ScheduledRestartRequested || (!session.StopRequested && exitCode != 0 && session.RestartEnabled);
+				session.ScheduledRestartRequested = false;
 				if (restart)
 				{
 					DateTime now = DateTime.UtcNow;
@@ -781,26 +795,8 @@ internal static partial class Launcher
 				{
 				}
 			}
-			if (restart)
-			{
-				Thread thread = new Thread((ThreadStart)delegate
-				{
-					Thread.Sleep(5000);
-					if (!IsDisposed)
-					{
-						try
-						{
-							TryPostToUi(this, (MethodInvoker)delegate { StartSession(session.Profile, true); });
-						}
-						catch
-						{
-						}
-					}
-				});
-				thread.IsBackground = true;
-				thread.Name = "서버 충돌 재시작 대기";
-				thread.Start();
-			}
+			if (!restart) HandlePostStopBackup(session);
+			if (restart) ScheduleManagedRestart(session);
 		}
 
 		private void StopSelected()
@@ -1108,7 +1104,8 @@ internal static partial class Launcher
 			renameButton.Enabled = profile != null && !mainServerBusy && !running && !runningElsewhere;
 			archiveButton.Enabled = profile != null && !mainServerBusy && !running && !runningElsewhere && profiles.Count > 1;
 			deleteButton.Enabled = profile != null && !mainServerBusy && !running && !runningElsewhere;
-			trashButton.Enabled = !mainServerBusy;
+			trashButton.Enabled = !mainServerBusy;
+			UpdateManagementFeatureActions(profile, running || runningElsewhere);
 		}
 
 		private void ShowManagedMessage(string korean, string english, bool warning)
@@ -1417,9 +1414,27 @@ internal static partial class Launcher
 		return result;
 	}
 
-	private static void ParseManagedServerLine(ManagedServerSession session, string line)
-	{
-		if (line.StartsWith("[Launcher] child-pid="))
+	private static void ParseManagedServerLine(ManagedServerSession session, string line)
+	{
+		Match metrics = Regex.Match(line, @"^\[MineHarbor Metrics\]\s+tps1=([0-9.]+),tps5=([0-9.]+),tps15=([0-9.]+),mspt=([0-9.]+)$", RegexOptions.IgnoreCase);
+		double tps1;
+		double tps5;
+		double tps15;
+		double mspt;
+		if (metrics.Success
+			&& double.TryParse(metrics.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out tps1)
+			&& double.TryParse(metrics.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out tps5)
+			&& double.TryParse(metrics.Groups[3].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out tps15)
+			&& double.TryParse(metrics.Groups[4].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out mspt))
+		{
+			session.MetricsAvailable = true;
+			session.Tps1 = tps1;
+			session.Tps5 = tps5;
+			session.Tps15 = tps15;
+			session.Mspt = mspt;
+			session.MetricsReceivedUtc = DateTime.UtcNow;
+		}
+		if (line.StartsWith("[Launcher] child-pid="))
 		{
 			string[] parts = line.Substring(21).Split(',');
 			int pid;

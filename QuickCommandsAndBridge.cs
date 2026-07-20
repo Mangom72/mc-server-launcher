@@ -160,6 +160,12 @@ internal static partial class Launcher
 		private DateTime lastConnectedUtc;
 		private DateTime lastReceivedUtc;
 		private string[] players = new string[0];
+		private bool metricsAvailable;
+		private double tps1;
+		private double tps5;
+		private double tps15;
+		private double mspt;
+		private DateTime metricsReceivedUtc;
 		private List<QuickCommandSuggestion> bridgeCommands = new List<QuickCommandSuggestion>();
 
 		public CommandBridgeSession(string directory, string profile)
@@ -187,6 +193,11 @@ internal static partial class Launcher
 		public int CommandCount { get { return commandCount; } }
 		public DateTime LastConnectedUtc { get { return lastConnectedUtc; } }
 		public string[] Players { get { lock (requestLock) return (string[])players.Clone(); } }
+		public bool MetricsAvailable { get { lock (requestLock) return metricsAvailable && DateTime.UtcNow - metricsReceivedUtc <= TimeSpan.FromSeconds(15); } }
+		public double Tps1 { get { lock (requestLock) return tps1; } }
+		public double Tps5 { get { lock (requestLock) return tps5; } }
+		public double Tps15 { get { lock (requestLock) return tps15; } }
+		public double Mspt { get { lock (requestLock) return mspt; } }
 		public List<QuickCommandSuggestion> Commands { get { lock (requestLock) return new List<QuickCommandSuggestion>(bridgeCommands); } }
 
 		private void AcceptLoop()
@@ -247,7 +258,7 @@ internal static partial class Launcher
 				bridgeVersion = BridgeString(hello, "version");
 				bridgeProtocol = BridgeInt(hello, "protocol");
 				NotifyCommandBridgeChanged();
-				SendObject(new Dictionary<string, object> { { "type", "capabilities" }, { "id", BridgeString(hello, "id") }, { "protocol", CommandBridgeProtocolVersion }, { "commandList", true }, { "suggest", true }, { "players", true } });
+				SendObject(new Dictionary<string, object> { { "type", "capabilities" }, { "id", BridgeString(hello, "id") }, { "protocol", CommandBridgeProtocolVersion }, { "commandList", true }, { "suggest", true }, { "players", true }, { "metrics", true } });
 				RequestCommandList();
 				int messagesInWindow = 0;
 				DateTime windowStartedUtc = DateTime.UtcNow;
@@ -282,6 +293,30 @@ internal static partial class Launcher
 			if (string.Equals(type, "players-update", StringComparison.Ordinal))
 			{
 				lock (requestLock) players = BridgeStringArray(message, "players", 200);
+				NotifyCommandBridgeChanged();
+				return;
+			}
+			if (string.Equals(type, "metrics-update", StringComparison.Ordinal))
+			{
+				bool supported = string.Equals(BridgeString(message, "supported"), "True", StringComparison.OrdinalIgnoreCase) || string.Equals(BridgeString(message, "supported"), "true", StringComparison.OrdinalIgnoreCase);
+				double receivedTps1 = 0.0;
+				double receivedTps5 = 0.0;
+				double receivedTps15 = 0.0;
+				double receivedMspt = 0.0;
+				if (supported && (!TryBridgeMetric(message, "tps1", out receivedTps1) || !TryBridgeMetric(message, "tps5", out receivedTps5) || !TryBridgeMetric(message, "tps15", out receivedTps15) || !TryBridgeMetric(message, "mspt", out receivedMspt))) supported = false;
+				lock (requestLock)
+				{
+					metricsAvailable = supported;
+					if (supported)
+					{
+						tps1 = receivedTps1;
+						tps5 = receivedTps5;
+						tps15 = receivedTps15;
+						mspt = receivedMspt;
+						metricsReceivedUtc = DateTime.UtcNow;
+					}
+				}
+				if (supported && ManagedChildMode) Console.WriteLine("[MineHarbor Metrics] tps1=" + tps1.ToString("0.000", CultureInfo.InvariantCulture) + ",tps5=" + tps5.ToString("0.000", CultureInfo.InvariantCulture) + ",tps15=" + tps15.ToString("0.000", CultureInfo.InvariantCulture) + ",mspt=" + mspt.ToString("0.000", CultureInfo.InvariantCulture));
 				NotifyCommandBridgeChanged();
 				return;
 			}
@@ -993,6 +1028,7 @@ internal static partial class Launcher
 	private static Dictionary<string, object> DeserializeBridgeObject(string json) { if (string.IsNullOrEmpty(json) || json.Length > CommandBridgeMaximumLineLength) throw new InvalidDataException("브리지 JSON 크기가 올바르지 않습니다."); Dictionary<string, object> value = new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string, object>; if (value == null || string.IsNullOrEmpty(BridgeString(value, "type")) || string.IsNullOrEmpty(BridgeString(value, "id"))) throw new InvalidDataException("브리지 JSON 형식이 올바르지 않습니다."); return value; }
 	private static string BridgeString(Dictionary<string, object> value, string key) { return value != null && value.ContainsKey(key) ? Convert.ToString(value[key], CultureInfo.InvariantCulture) ?? string.Empty : string.Empty; }
 	private static int BridgeInt(Dictionary<string, object> value, string key) { int result; return int.TryParse(BridgeString(value, key), NumberStyles.Integer, CultureInfo.InvariantCulture, out result) ? result : 0; }
+	private static bool TryBridgeMetric(Dictionary<string, object> value, string key, out double result) { return double.TryParse(BridgeString(value, key), NumberStyles.Float, CultureInfo.InvariantCulture, out result) && !double.IsNaN(result) && !double.IsInfinity(result) && result >= 0.0; }
 	private static bool BridgeStringEquals(Dictionary<string, object> value, string key, string expected) { return string.Equals(BridgeString(value, key), expected, StringComparison.Ordinal); }
 	private static string[] BridgeStringArray(Dictionary<string, object> value, string key, int maximum) { object[] array = value != null && value.ContainsKey(key) ? value[key] as object[] : null; if (array == null) return new string[0]; List<string> result = new List<string>(); for (int i = 0; i < array.Length && result.Count < maximum; i++) { string item = Convert.ToString(array[i], CultureInfo.InvariantCulture); if (!string.IsNullOrWhiteSpace(item) && item.Length <= 512) result.Add(item); } return result.ToArray(); }
 	private static void WriteBridgeError(StreamWriter writer, string id, string message) { writer.WriteLine(new JavaScriptSerializer().Serialize(new Dictionary<string, object> { { "type", "error" }, { "id", string.IsNullOrEmpty(id) ? "0" : id }, { "message", message } })); }

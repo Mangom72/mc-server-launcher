@@ -919,7 +919,7 @@ internal static partial class Launcher
 
 	private static string GetLauncherIntegrationUserAgent()
 	{
-		return "MineHarbor/1.6 (+https://github.com/" + GetLauncherReleaseRepositoryPath() + ")";
+		return "Mangom72-MineHarbor/" + BuildVersionInfo.ProductVersion + " (+https://github.com/" + GetLauncherReleaseRepositoryPath() + ")";
 	}
 
 	private static string GetJsonString(Dictionary<string, object> dictionary, string key)

@@ -4,6 +4,26 @@
 
 Product versions follow [Semantic Versioning](https://semver.org/), while `26.2.45.xx` is a separate internal build number.
 
+## [1.6.0] - 2026-07-20
+
+### Korean
+
+- **통합 콘텐츠 관리**: `.mineharbor/content-manifest.json`을 도입해 설치된 플러그인·모드·데이터팩을 수동 파일과 구분하고, 호환 버전·로더 및 필수 의존성을 검사한 검색·설치·개별/일괄 업데이트·비활성화·복구 가능한 제거를 추가했습니다.
+- **데이터팩 검증**: Vanilla, Paper, Purpur와 직접 JAR 프로필의 월드를 찾아 `world/datapacks`에 설치하며, 루트 `pack.mcmeta`, 안전한 ZIP 경로, 중복 항목, 압축 파일 수와 해제 크기를 검증합니다.
+- **서버 자동화**: `.mineharbor/automation.json`에 서버별 정기 백업, 시작 전·종료 후 백업, 예약 시작·종료·재시작·명령, 플레이어 사전 공지, 다음/최근 실행 결과와 개수·기간·총용량 보존 정책을 저장합니다. MineHarbor 관리 창이 실행 중일 때 일정을 평가하며, 원자적 실행 임대로 중복 실행과 만료된 실행 상태를 처리합니다.
+- **운영 대시보드**: 서버 상태·가동 시간, Java CPU·메모리·버전, 플레이어, 서버·월드·백업 용량, 최근 경고·오류, 외부 접속 결과와 다음 예약을 표시합니다. Paper/Purpur 브리지가 실제 제공한 경우에만 TPS/MSPT를 표시합니다.
+- **비동기·UI 구조 개선**: 콘텐츠·자동화·상태 수집을 별도 partial 서비스/화면으로 분리하고, 장시간 작업에 `Task`, `async/await`, `CancellationToken`, 진행률과 닫힌 UI 콜백 차단을 적용했습니다.
+- **빌드와 검증 강화**: PR/main CI와 `net48` SDK 스타일 병행 프로젝트, 버전·문서 일치 검사, Portable EXE·브리지 검증을 추가하고 손상 manifest, 해시 불일치, 의존성 순환, 잘못된 데이터팩, 중복 일정, 백업 실패, 브리지 연결 해제와 UI 종료 회귀를 포함한 24개 테스트 그룹을 통과했습니다.
+
+### English
+
+- **Unified content management**: Added `.mineharbor/content-manifest.json`, managed/manual distinction, compatibility and required-dependency checks, search/install, individual or batch updates, enable/disable, and recoverable removal for plugins, mods, and data packs.
+- **Data-pack validation**: Discovers worlds for Vanilla, Paper, Purpur, and custom-JAR profiles, installs into `world/datapacks`, and validates root `pack.mcmeta`, safe ZIP paths, duplicates, entry counts, and expanded size.
+- **Server automation**: Stores per-server recurring and start/stop-hook backups, scheduled start/stop/restart/commands, player warnings, next/latest results, and count/day/size retention in `.mineharbor/automation.json`. Schedules are evaluated while a MineHarbor management window is running; atomic execution leases prevent duplicate jobs and recover expired runs.
+- **Operations dashboard**: Shows status, uptime, Java CPU/memory/version, players, server/world/backup size, recent warnings/errors, external-access results, and the next job. TPS/MSPT appear only when actually supplied by the Paper/Purpur bridge.
+- **Async and UI structure**: Split content, automation, and status collection into dedicated partial services/forms and applied `Task`, `async/await`, cancellation, progress, and closed-UI callback guards to long operations.
+- **Build and verification**: Added PR/main CI, a parallel SDK-style `net48` project, version/document consistency checks, Portable and bridge validation, and 24 test groups covering corrupt manifests, hash mismatch, dependency cycles, invalid data packs, duplicate schedules, backup failures, bridge disconnects, and closed UIs.
+
 ## [1.5.23] - 2026-07-20
 
 ### Korean

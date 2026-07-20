@@ -49,6 +49,8 @@ internal static class LauncherTests
             TestSocketUpnpLocalServer();
 			TestUpnpOwnershipRules();
 			TestModrinthHash(temporary);
+			TestContentManagement(temporary);
+			TestServerAutomationAndDashboard(temporary);
 			TestDiagnosticRedaction(temporary);
 			TestQuickCommandsAndBridge(temporary);
 			Console.WriteLine("PASSED=" + passed);
@@ -443,8 +445,8 @@ internal static class LauncherTests
 		object managedIcon = Enum.Parse(managedIconType, "Server");
 		string[][] managementLabels = new string[][]
 		{
-			new string[] { "시작", "안전 종료", "콘솔", "새 서버", "복제", "가져오기", "이름 변경", "보관", "삭제", "휴지통", "영구 삭제", "기본 서버로", "새로고침", "이 서버 선택" },
-			new string[] { "Start", "Stop safely", "Console", "New", "Clone", "Import", "Rename", "Archive", "Delete", "Trash", "Delete forever", "Set active", "Refresh" }
+			new string[] { "시작", "안전 종료", "콘솔", "새 서버", "복제", "가져오기", "이름 변경", "보관", "삭제", "휴지통", "영구 삭제", "기본 서버로", "새로고침", "이 서버 선택", "콘텐츠", "백업", "일정", "대시보드" },
+			new string[] { "Start", "Stop safely", "Console", "New", "Clone", "Import", "Rename", "Archive", "Delete", "Trash", "Delete forever", "Set active", "Refresh", "Content", "Backups", "Schedules", "Dashboard" }
 		};
 		foreach (string[] labels in managementLabels)
 		{
@@ -504,7 +506,7 @@ internal static class LauncherTests
 				languageField.SetValue(null, language);
 				applyLocalization.Invoke(form, null);
 				form.PerformLayout();
-				foreach (string fieldName in new string[] { "startButton", "stopButton", "settingsButton", "upgradeButton", "consoleButton", "profilesButton", "backupButton", "contentButton", "playersButton", "networkButton", "diagnosticsButton", "launcherUpdateButton" })
+				foreach (string fieldName in new string[] { "startButton", "stopButton", "settingsButton", "upgradeButton", "consoleButton", "profilesButton", "backupButton", "contentButton", "playersButton", "networkButton", "diagnosticsButton", "mainScheduleButton", "mainDashboardButton", "launcherUpdateButton" })
 				{
 					Button action = (Button)GetPrivateField(formType, form, fieldName);
 					Size measured = TextRenderer.MeasureText(action.Text, action.Font, new Size(Math.Max(1, action.Width - 45), action.Height), TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
@@ -664,10 +666,14 @@ internal static class LauncherTests
 		Directory.CreateDirectory(Path.Combine(profile, "world"));
 		File.WriteAllText(Path.Combine(profile, "world", "level.dat"), "world-v1");
 		File.WriteAllText(Path.Combine(profile, "server.properties"), "server-port=25565");
+		Directory.CreateDirectory(Path.Combine(profile, ".mineharbor", "content-trash"));
+		File.WriteAllText(Path.Combine(profile, ".mineharbor", "content-trash", "removed.jar"), "removed");
 		string backup = Convert.ToString(Invoke("CreateComprehensiveServerBackup", new object[] { profile, 3, "test" }));
+		using (ZipArchive archive = ZipFile.OpenRead(backup)) Equal(null, archive.GetEntry("profile/.mineharbor/content-trash/removed.jar"), "콘텐츠 휴지통 백업 제외");
 		File.WriteAllText(Path.Combine(profile, "server.properties"), "server-port=25566");
 		Invoke("RestoreComprehensiveBackup", new object[] { profile, backup, 3 });
 		Equal("server-port=25565", File.ReadAllText(Path.Combine(profile, "server.properties")), "백업 복원");
+		Equal(true, File.Exists(Path.Combine(profile, ".mineharbor", "content-trash", "removed.jar")), "복원 중 콘텐츠 휴지통 보존");
 		string injectedBackup = Path.Combine(root, "backup-with-unmanifested-file.zip");
 		File.Copy(backup, injectedBackup, true);
 		using (ZipArchive archive = ZipFile.Open(injectedBackup, ZipArchiveMode.Update))
@@ -854,6 +860,203 @@ internal static class LauncherTests
 		Pass();
 	}
 
+	private static void TestContentManagement(string root)
+	{
+		string server = Path.Combine(root, "content-profile");
+		Directory.CreateDirectory(Path.Combine(server, "plugins"));
+		Directory.CreateDirectory(Path.Combine(server, "world", "datapacks"));
+		File.WriteAllText(Path.Combine(server, "world", "level.dat"), "test-world");
+		File.WriteAllText(Path.Combine(server, "server.properties"), "level-name=world\r\n");
+		string manualJar = Path.Combine(server, "plugins", "manual.jar");
+		File.WriteAllText(manualJar, "manual plugin");
+
+		IList initial = (IList)Invoke("ScanInstalledContent", new object[] { server, "paper" });
+		Equal(1, initial.Count, "수동 플러그인 검색");
+		object manualItem = initial[0];
+		Equal(false, GetField(manualItem, "Managed"), "수동 설치와 관리 설치 구분");
+		object manualEntry = GetField(manualItem, "Entry");
+		Invoke("SetContentEnabled", new object[] { server, manualEntry, false });
+		Equal(false, File.Exists(manualJar), "수동 플러그인 비활성화 이동");
+		Invoke("SetContentEnabled", new object[] { server, manualEntry, true });
+		Equal(true, File.Exists(manualJar), "수동 플러그인 다시 활성화");
+
+		string manifestPath = Path.Combine(server, ".mineharbor", "content-manifest.json");
+		string validManifest = File.ReadAllText(manifestPath);
+		File.WriteAllText(manifestPath, "{broken", new UTF8Encoding(false));
+		ExpectFailure(delegate { Invoke("LoadContentManifest", new object[] { server }); }, "손상된 콘텐츠 manifest 차단");
+		File.WriteAllText(manifestPath, validManifest, new UTF8Encoding(false));
+		int itemsStart = validManifest.IndexOf("\"items\":[", StringComparison.Ordinal) + 9;
+		int itemsEnd = validManifest.LastIndexOf(']');
+		string oneItem = validManifest.Substring(itemsStart, itemsEnd - itemsStart);
+		string duplicated = validManifest.Substring(0, itemsStart) + oneItem + "," + oneItem + validManifest.Substring(itemsEnd);
+		File.WriteAllText(manifestPath, duplicated, new UTF8Encoding(false));
+		ExpectFailure(delegate { Invoke("LoadContentManifest", new object[] { server }); }, "중복 콘텐츠 manifest 항목 차단");
+		File.WriteAllText(manifestPath, validManifest, new UTF8Encoding(false));
+
+		Equal(false, Invoke("VerifyContentFileHash", new object[] { manualJar, new string('0', 128), string.Empty }), "콘텐츠 해시 불일치 차단");
+		Dictionary<string, string[]> graph = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+		graph["a"] = new string[] { "b" }; graph["b"] = new string[] { "a" };
+		ExpectFailure(delegate { Invoke("ValidateContentDependencyGraph", new object[] { graph }); }, "콘텐츠 의존성 순환 차단");
+
+		string invalidDatapack = Path.Combine(root, "invalid-datapack.zip");
+		using (ZipArchive archive = ZipFile.Open(invalidDatapack, ZipArchiveMode.Create))
+		using (StreamWriter writer = new StreamWriter(archive.CreateEntry("wrapper/readme.txt").Open())) writer.Write("invalid");
+		ExpectFailure(delegate { Invoke("ValidateDatapackArchive", new object[] { invalidDatapack }); }, "pack.mcmeta 없는 데이터팩 차단");
+		string unsafeDatapack = Path.Combine(root, "unsafe-datapack.zip");
+		using (ZipArchive archive = ZipFile.Open(unsafeDatapack, ZipArchiveMode.Create))
+		{
+			using (StreamWriter writer = new StreamWriter(archive.CreateEntry("pack.mcmeta").Open())) writer.Write("{\"pack\":{\"pack_format\":48,\"description\":\"test\"}}");
+			using (StreamWriter writer = new StreamWriter(archive.CreateEntry("..").Open())) writer.Write("unsafe");
+		}
+		ExpectFailure(delegate { Invoke("ValidateDatapackArchive", new object[] { unsafeDatapack }); }, "데이터팩 특수 경로 차단");
+		string validDatapack = Path.Combine(root, "valid-datapack.zip");
+		using (ZipArchive archive = ZipFile.Open(validDatapack, ZipArchiveMode.Create))
+		{
+			using (StreamWriter writer = new StreamWriter(archive.CreateEntry("pack.mcmeta").Open())) writer.Write("{\"pack\":{\"pack_format\":48,\"description\":\"test\"}}");
+			using (StreamWriter writer = new StreamWriter(archive.CreateEntry("data/test/functions/load.mcfunction").Open())) writer.Write("say test");
+		}
+		Invoke("ValidateDatapackArchive", new object[] { validDatapack });
+
+		Type optionsType = launcher.GetNestedType("LauncherOptions", BindingFlags.NonPublic);
+		object options = Activator.CreateInstance(optionsType, true);
+		SetPublic(options, "ServerDirectory", server); SetPublic(options, "ProfileName", "content-test"); SetPublic(options, "ServerType", "paper"); SetPublic(options, "MinecraftVersion", "1.21.11");
+		string installedDatapack = Convert.ToString(Invoke("InstallLocalContentFile", new object[] { validDatapack, options, "datapack", "world" }));
+		Equal(true, File.Exists(installedDatapack), "검증된 데이터팩 설치");
+		ExpectFailure(delegate { Invoke("InstallLocalContentFile", new object[] { validDatapack, options, "datapack", "world" }); }, "데이터팩 중복 설치 차단");
+
+		string localSource = Path.Combine(root, "local-content.jar");
+		File.WriteAllText(localSource, "local managed plugin");
+		string localInstalled = Convert.ToString(Invoke("InstallLocalContentFile", new object[] { localSource, options, "plugin", string.Empty }));
+		Equal(true, File.Exists(localInstalled), "로컬 콘텐츠 파일 설치");
+		ExpectFailure(delegate { Invoke("InstallLocalContentFile", new object[] { localSource, options, "plugin", string.Empty }); }, "동일 파일 중복 설치 차단");
+
+		object cycleManifest = Invoke("LoadContentManifest", new object[] { server });
+		IList cycleItems = (IList)GetField(cycleManifest, "Items");
+		cycleItems.Add(CreateContentManifestEntry("cycle-a", "cycle-a", "cycle-a.jar", new string[] { "cycle-b" }));
+		cycleItems.Add(CreateContentManifestEntry("cycle-b", "cycle-b", "cycle-b.jar", new string[] { "cycle-a" }));
+		ExpectFailure(delegate { Invoke("SaveContentManifest", new object[] { server, cycleManifest }); }, "manifest 의존성 순환 저장 차단");
+
+		object dependencyManifest = Invoke("LoadContentManifest", new object[] { server });
+		IList dependencyItems = (IList)GetField(dependencyManifest, "Items");
+		object dependencyEntry = CreateContentManifestEntry("required-library", "required-library", "required-library.jar", new string[0]);
+		object consumerEntry = CreateContentManifestEntry("consumer-plugin", "consumer-plugin", "consumer-plugin.jar", new string[] { "required-library" });
+		dependencyItems.Add(dependencyEntry); dependencyItems.Add(consumerEntry);
+		File.WriteAllText(Path.Combine(server, "plugins", "required-library.jar"), "dependency");
+		File.WriteAllText(Path.Combine(server, "plugins", "consumer-plugin.jar"), "consumer");
+		Invoke("SaveContentManifest", new object[] { server, dependencyManifest });
+		ExpectFailure(delegate { Invoke("RemoveContentItem", new object[] { server, dependencyEntry }); }, "사용 중인 필수 의존성 제거 차단");
+		Equal(true, File.Exists(Path.Combine(server, "plugins", "required-library.jar")), "의존성 제거 실패 시 원본 보존");
+
+		IList afterInstall = (IList)Invoke("ScanInstalledContent", new object[] { server, "paper" });
+		object missingEntry = null;
+		for (int i = 0; i < afterInstall.Count; i++) if (string.Equals(Convert.ToString(GetField(afterInstall[i], "FullPath")), localInstalled, StringComparison.OrdinalIgnoreCase)) missingEntry = GetField(afterInstall[i], "Entry");
+		if (missingEntry == null) throw new InvalidOperationException("설치된 로컬 콘텐츠를 manifest에서 찾지 못했습니다.");
+		File.Delete(localInstalled);
+		ExpectFailure(delegate { Invoke("RemoveContentItem", new object[] { server, missingEntry }); }, "제거 대상 파일 없음 처리");
+
+		Type formType = launcher.GetNestedType("UnifiedContentManagerForm", BindingFlags.NonPublic);
+		using (Form form = (Form)Activator.CreateInstance(formType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { options }, null))
+		{
+			Equal(AutoScaleMode.Dpi, form.AutoScaleMode, "콘텐츠 관리 DPI 배율");
+			ListView list = (ListView)GetPrivateField(formType, form, "installedList");
+			if (string.IsNullOrEmpty(list.AccessibleName)) throw new InvalidOperationException("콘텐츠 목록 접근성 이름이 없습니다.");
+		}
+		Pass();
+	}
+
+	private static void TestServerAutomationAndDashboard(string root)
+	{
+		string server = Path.Combine(root, "automation-profile");
+		Directory.CreateDirectory(Path.Combine(server, "world"));
+		File.WriteAllText(Path.Combine(server, "world", "level.dat"), "world");
+		File.WriteAllText(Path.Combine(server, "server.properties"), "level-name=world\r\n");
+		object configuration = Invoke("ReadServerAutomationConfiguration", new object[] { server });
+		Equal(1, GetField(configuration, "SchemaVersion"), "자동화 설정 스키마 기본값");
+		Type jobType = launcher.GetNestedType("ServerAutomationJob", BindingFlags.NonPublic);
+		object job = Activator.CreateInstance(jobType, true);
+		SetPublic(job, "Id", "scheduled-backup");
+		SetPublic(job, "Name", "정기 백업");
+		SetPublic(job, "Action", "backup");
+		SetPublic(job, "Enabled", true);
+		SetPublic(job, "ScheduleKind", "interval");
+		SetPublic(job, "IntervalMinutes", 60);
+		SetPublic(job, "DailyLocalTime", "04:00");
+		SetPublic(job, "WarningSeconds", 0);
+		SetPublic(job, "NextRunUtc", DateTime.UtcNow.AddMinutes(-1).ToString("o"));
+		((IList)GetField(configuration, "Jobs")).Add(job);
+		Invoke("WriteServerAutomationConfiguration", new object[] { server, configuration });
+		IList firstClaims = (IList)Invoke("ClaimDueAutomationJobs", new object[] { server, DateTime.UtcNow });
+		Equal(1, firstClaims.Count, "예약 작업 첫 실행 임대");
+		IList duplicateClaims = (IList)Invoke("ClaimDueAutomationJobs", new object[] { server, DateTime.UtcNow });
+		Equal(0, duplicateClaims.Count, "예약 작업 중복 실행 차단");
+		Invoke("CompleteAutomationJob", new object[] { firstClaims[0], DateTime.UtcNow, "test-completed" });
+		object completedConfiguration = Invoke("ReadServerAutomationConfiguration", new object[] { server });
+		object completedJob = ((IList)GetField(completedConfiguration, "Jobs"))[0];
+		Equal(false, GetField(completedJob, "Running"), "예약 작업 임대 해제");
+		Equal("test-completed", GetField(completedJob, "LastResult"), "예약 작업 최근 결과 기록");
+		SetPublic(completedJob, "Running", true);
+		SetPublic(completedJob, "LeaseUtc", DateTime.UtcNow.ToString("o"));
+		SetPublic(completedJob, "LeaseProcessId", int.MaxValue);
+		SetPublic(completedJob, "LeaseProcessStartTicks", 1L);
+		SetPublic(completedJob, "NextRunUtc", DateTime.UtcNow.AddMinutes(-1).ToString("o"));
+		Invoke("WriteServerAutomationConfiguration", new object[] { server, completedConfiguration });
+		IList recoveredClaims = (IList)Invoke("ClaimDueAutomationJobs", new object[] { server, DateTime.UtcNow });
+		Equal(1, recoveredClaims.Count, "종료된 프로세스의 예약 작업 임대 복구");
+		Invoke("CompleteAutomationJob", new object[] { recoveredClaims[0], DateTime.UtcNow, "lease-recovered" });
+
+		string automationPath = Convert.ToString(Invoke("GetAutomationConfigurationPath", new object[] { server }));
+		File.WriteAllText(automationPath, "{ broken", Encoding.UTF8);
+		ExpectFailure(delegate { Invoke("ReadServerAutomationConfiguration", new object[] { server }); }, "손상된 자동화 설정 차단");
+		Equal("{ broken", File.ReadAllText(automationPath, Encoding.UTF8), "손상된 자동화 설정 원본 보존");
+		File.Delete(automationPath);
+		ExpectFailure(delegate { Invoke("ValidateScheduledCommand", new object[] { "say first\nstop" }); }, "예약 명령 줄바꿈 차단");
+
+		string backups = Path.Combine(server, "server-backups");
+		Directory.CreateDirectory(backups);
+		for (int i = 0; i < 5; i++)
+		{
+			string path = Path.Combine(backups, "server-2026010" + i + "-000000-000-test.zip");
+			File.WriteAllBytes(path, new byte[64]);
+			File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-i));
+		}
+		Invoke("PruneServerBackupsWithPolicy", new object[] { backups, 2, 2, 104857600L, DateTime.UtcNow });
+		Equal(2, Directory.GetFiles(backups, "server-*.zip").Length, "백업 개수·기간 보존 정책");
+		Equal(true, File.Exists(Path.Combine(backups, "server-20260100-000000-000-test.zip")), "최신 백업 보존");
+		string emptyServer = Path.Combine(root, "automation-empty-backup");
+		Directory.CreateDirectory(emptyServer);
+		ExpectFailure(delegate { Invoke("CreateComprehensiveServerBackup", new object[] { emptyServer, 3, "scheduled" }); }, "백업 대상 없음 실패 처리");
+
+		Type profileType = launcher.GetNestedType("ManagedProfileRecord", BindingFlags.NonPublic);
+		object profile = Activator.CreateInstance(profileType, true);
+		SetPublic(profile, "Name", "대시보드 테스트"); SetPublic(profile, "Directory", server); SetPublic(profile, "ServerType", "paper"); SetPublic(profile, "MinecraftVersion", "1.21.11"); SetPublic(profile, "Port", 25565); SetPublic(profile, "MemoryGb", 2);
+		Type sessionType = launcher.GetNestedType("ManagedServerSession", BindingFlags.NonPublic);
+		object session = Activator.CreateInstance(sessionType, true);
+		SetPublic(session, "Profile", profile);
+		Invoke("ParseManagedServerLine", new object[] { session, "[MineHarbor Metrics] tps1=20.000,tps5=19.900,tps15=19.800,mspt=12.500" });
+		Equal(true, GetField(session, "MetricsAvailable"), "브리지 TPS 지표 수신");
+		Equal(12.5, GetField(session, "Mspt"), "브리지 MSPT 지표 수신");
+		string disconnected = Convert.ToString(Invoke("GetTickHealthStatus", new object[] { null }));
+		if (disconnected.IndexOf("지원되지", StringComparison.OrdinalIgnoreCase) < 0 && disconnected.IndexOf("Unavailable", StringComparison.OrdinalIgnoreCase) < 0) throw new InvalidOperationException("브리지 연결 해제 상태를 명시하지 않았습니다.");
+		object snapshot = AwaitTaskResult(Invoke("CollectServerStatusAsync", new object[] { profile, null, CancellationToken.None }));
+		if (string.IsNullOrWhiteSpace(Convert.ToString(GetField(snapshot, "ServerSize")))) throw new InvalidOperationException("대시보드 서버 용량이 비어 있습니다.");
+
+		Type automationFormType = launcher.GetNestedType("AutomationManagerForm", BindingFlags.NonPublic);
+		using (Form form = (Form)Activator.CreateInstance(automationFormType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { server }, null))
+		{
+			Equal(AutoScaleMode.Dpi, form.AutoScaleMode, "자동화 UI DPI 배율");
+			ListView list = (ListView)GetPrivateField(automationFormType, form, "jobList");
+			if (string.IsNullOrWhiteSpace(list.AccessibleName)) throw new InvalidOperationException("예약 작업 목록 접근성 이름이 없습니다.");
+		}
+		Type dashboardFormType = launcher.GetNestedType("ServerStatusDashboardForm", BindingFlags.NonPublic);
+		using (Form dashboard = (Form)Activator.CreateInstance(dashboardFormType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { profile, session }, null))
+		{
+			dashboard.Show(); Application.DoEvents(); dashboard.Close(); Application.DoEvents();
+			CancellationTokenSource closedCancellation = (CancellationTokenSource)GetPrivateField(dashboardFormType, dashboard, "cancellation");
+			Equal(true, closedCancellation.IsCancellationRequested, "UI 종료 후 비동기 콜백 취소");
+		}
+		Pass();
+	}
+
 	private static void TestDiagnosticRedaction(string root)
 	{
 		string server = Path.Combine(root, "server");
@@ -1031,6 +1234,14 @@ internal static class LauncherTests
 		object session = Activator.CreateInstance(sessionType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { sessionDirectory, "profile-test" }, null);
 		try
 		{
+			Equal(false, GetMember(session, "MetricsAvailable"), "연결 전 브리지 지표 미지원 상태");
+			Dictionary<string, object> metricsMessage = new Dictionary<string, object> { { "type", "metrics-update" }, { "id", "m1" }, { "supported", true }, { "tps1", 20.0 }, { "tps5", 19.9 }, { "tps15", 19.8 }, { "mspt", 12.5 } };
+			sessionType.GetMethod("HandleBridgeMessage", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(session, new object[] { metricsMessage });
+			Equal(true, GetMember(session, "MetricsAvailable"), "브리지 지표 메시지 처리");
+			Equal(12.5, GetMember(session, "Mspt"), "브리지 MSPT 메시지 처리");
+			Dictionary<string, object> invalidMetricsMessage = new Dictionary<string, object> { { "type", "metrics-update" }, { "id", "m2" }, { "supported", true }, { "tps1", "NaN" }, { "tps5", 19.9 }, { "tps15", 19.8 }, { "mspt", 12.5 } };
+			sessionType.GetMethod("HandleBridgeMessage", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(session, new object[] { invalidMetricsMessage });
+			Equal(false, GetMember(session, "MetricsAvailable"), "잘못된 브리지 지표를 추정값으로 표시하지 않음");
 			TcpListener listener = (TcpListener)sessionType.GetField("listener", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(session);
 			IPEndPoint endpoint = (IPEndPoint)listener.LocalEndpoint;
 			Equal(true, IPAddress.IsLoopback(endpoint.Address), "브리지 리스너 루프백 바인딩");
@@ -1114,6 +1325,26 @@ internal static class LauncherTests
 	private static object GetPrivateField(Type type, object instance, string name) { return type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(instance); }
 	private static void SetStaticField(string name, object value) { launcher.GetField(name, BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, value); }
 	private static void SetPublic(object instance, string name, object value) { instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public).SetValue(instance, value); }
+	private static object CreateContentManifestEntry(string id, string projectId, string fileName, string[] dependencies)
+	{
+		Type type = launcher.GetNestedType("ContentManifestEntry", BindingFlags.NonPublic);
+		object entry = Activator.CreateInstance(type, true);
+		SetPublic(entry, "Id", id);
+		SetPublic(entry, "Kind", "plugin");
+		SetPublic(entry, "Source", "modrinth");
+		SetPublic(entry, "ProjectId", projectId);
+		SetPublic(entry, "VersionId", "test-version");
+		SetPublic(entry, "VersionName", "1.0.0");
+		SetPublic(entry, "FileName", fileName);
+		SetPublic(entry, "RelativePath", "plugins/" + fileName);
+		SetPublic(entry, "DisabledRelativePath", ".mineharbor/disabled/plugin/" + id + "-" + fileName);
+		SetPublic(entry, "WorldName", string.Empty);
+		SetPublic(entry, "Managed", true);
+		SetPublic(entry, "Active", true);
+		SetPublic(entry, "InstalledUtc", DateTime.UtcNow.ToString("o"));
+		SetPublic(entry, "Dependencies", dependencies);
+		return entry;
+	}
 	private static void Pass() { passed++; }
 	private static void Equal(object expected, object actual, string name) { if (!object.Equals(expected, actual)) throw new InvalidOperationException(name + ": expected=" + expected + ", actual=" + actual); }
 	private static void ExpectFailure(Action action, string name)

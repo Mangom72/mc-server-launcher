@@ -1,5 +1,17 @@
 # CODEX_HANDOFF.md
 
+## 0. Current implementation state (v1.6.0)
+
+- Active development branch: `codex/content-scheduler-dashboard-v1.6.0`
+- Version source of truth: `version.json` = 1.6.0 / build 26.2.45.64
+- New per-server state: `.mineharbor/content-manifest.json` and `.mineharbor/automation.json`
+- New user areas: installed content/Modrinth/data packs, backup schedules and commands, and a live server status dashboard
+- New service boundaries: `ContentManagementServices.cs`, `ServerAutomation.cs`, and the UI integration in `ContentManagementUi.cs` / `ServerManagementFeatures.cs`
+- CI: `.github/workflows/ci.yml` validates PRs and main separately from `.github/workflows/build-release.yml`; both build the SDK-style `net48` project and the legacy Portable path.
+- Local release validation passed with 24 test groups, 10 bridge protocol cases, Portable smoke/version tests, release artifact/hash verification, UI scan, and security regression scan.
+- The default runtime remains .NET Framework 4.8. `MineHarbor.csproj` is the migration bridge; do not switch to .NET 10 until updater, COM/UPnP, WinForms, installer, and Portable compatibility tests are equivalent.
+- Do not infer dashboard values. Paper/Purpur TPS/MSPT is shown only when the local bridge reports it; unsupported or disconnected values remain explicit.
+
 This document was created for handoff purposes by analyzing the previous AI (Codex) chat history (`CODEX_CHAT_HISTORY.md`) and the current state of the project.
 
 ## 1. Ultimate Goal of the Program
@@ -31,6 +43,8 @@ This document was created for handoff purposes by analyzing the previous AI (Cod
 - **Fabric/Forge Bridge**: External bridge command auto-completion for non-Paper servers (like Fabric) is not yet implemented.
 - **Authenticode (Code Signing)**: Currently lacks a Windows signing certificate, so running the app may trigger a `NotSigned` SmartScreen warning.
 - **High DPI Scaling**: Needs further testing and optimization for edge cases like 125%, 150%+ multi-monitor environments.
+- **Modern .NET Runtime**: The repository now has an SDK-style `net48` project, but moving the shipped runtime to .NET 10 remains a staged migration rather than a completed target switch.
+- **Metrics Bridge Coverage**: TPS/MSPT metrics are implemented for the Paper/Purpur bridge. Fabric/Forge and Vanilla expose these values as unsupported instead of estimates.
 
 ## 5. User Rejected or Discarded Ideas
 - **Hardcoded Username Features**: The exclusive auto-OP and log-hiding features for a specific user were rejected for security and versatility.
@@ -73,10 +87,11 @@ This document was created for handoff purposes by analyzing the previous AI (Cod
 - **No Personal Identifiers**: No special privileges should be granted to `Mangom72` or any specific user in the logic (except for standard GitHub URLs).
 
 ## 10. Next Steps / Tasks to be Done
-- Clarify and document the automatic version increment policies.
-- Consider expanding the bridge (command auto-completion) for Fabric/Forge environments.
-- Prepare for Windows Code Signing (Authenticode) in the future.
-- Check if test pipelines and local test environment scripts need updating.
+- Run the new PR CI and resolve any difference between the GitHub Windows SDK build and the verified local legacy build.
+- Expand bridge command completion and TPS/MSPT metrics to Fabric/Forge if a stable server-side API is selected.
+- Prepare for Windows Code Signing (Authenticode) and validate SmartScreen reputation on signed releases.
+- Exercise 125%, 150%, and mixed-DPI multi-monitor layouts with representative long Korean and English strings.
+- Continue the .NET 10 migration sequence in `docs/architecture/DOTNET_MODERNIZATION.md` without changing the shipped target until compatibility gates pass.
 
 ## 11. Conflicts Between History and Actual Code
 - **File Name Changes**: Chat history initially mentions `Paper-26.2-Server.exe` or `Minecraft-Server-Launcher.exe`, but the final applied app name is `MineHarbor.exe`. All logic and docs must adhere to this latest name.
@@ -85,4 +100,4 @@ This document was created for handoff purposes by analyzing the previous AI (Cod
 ## 12. Project Maintenance and Deployment Policies (Confirmed from Chat History)
 - **Version Bump Criteria (`productVersion`)**: Follows Semantic Versioning. Bug fixes bump the patch (`x.x.1`), new features bump the minor (`x.1.x`), and breaking changes bump the major (`1.x.x`) version.
 - **Internal Build Number (`buildNumber`)**: When updating `version.json`, increment the very last digit by 1 alongside the `productVersion` (e.g., `26.2.45.36` -> `26.2.45.37`).
-- **Deployment Workflow**: Commit and push changes (including `version.json`) to the `main` branch. Then, create and push a matching tag (`v1.x.x`), or create a release via GitHub CLI (`gh release create`). This triggers GitHub Actions, which automatically builds, tests, compresses assets, verifies hashes, and publishes the final release.
+- **Deployment Workflow**: Never commit or push directly to `main`. Push a `codex/` feature branch, require the PR CI to pass, merge through review, and only then create the matching `v1.x.x` tag or explicitly dispatch the release workflow. The release workflow rebuilds, tests, packages, verifies hashes, and publishes the final release.

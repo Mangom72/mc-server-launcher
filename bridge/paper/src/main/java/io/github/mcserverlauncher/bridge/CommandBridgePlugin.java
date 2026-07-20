@@ -43,10 +43,12 @@ public final class CommandBridgePlugin extends JavaPlugin implements Listener {
     private volatile Socket socket;
     private volatile BufferedWriter writer;
     private Thread connectionThread;
+	private int metricsTaskId = -1;
 
     @Override
     public void onEnable() {
         Bukkit.getPluginManager().registerEvents(this, this);
+		metricsTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, this::sendMetrics, 20L, 100L);
         connectionThread = new Thread(this::connectionLoop, "MCSL 명령 브리지 연결");
         connectionThread.setDaemon(true);
         connectionThread.start();
@@ -55,6 +57,7 @@ public final class CommandBridgePlugin extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
         stopping = true;
+		if (metricsTaskId >= 0) Bukkit.getScheduler().cancelTask(metricsTaskId);
         closeConnection();
         if (connectionThread != null) {
             try { connectionThread.join(2000L); } catch (InterruptedException exception) { Thread.currentThread().interrupt(); }
@@ -187,6 +190,29 @@ public final class CommandBridgePlugin extends JavaPlugin implements Listener {
         Collections.sort(players, String.CASE_INSENSITIVE_ORDER);
         send(BridgeProtocol.object("type", "players-update", "id", nextId(), "players", players));
     }
+
+	/** Paper/Purpur가 공개하는 틱 지표만 전달하며, 없는 API의 값은 추정하지 않습니다. */
+	private void sendMetrics() {
+		try {
+			Object server = Bukkit.getServer();
+			double[] tps = (double[]) server.getClass().getMethod("getTPS").invoke(server);
+			Number averageTickTime = (Number) server.getClass().getMethod("getAverageTickTime").invoke(server);
+			if (tps == null || tps.length < 3 || averageTickTime == null) throw new IllegalStateException("metrics-unavailable");
+			double tps1 = requireFiniteNonNegative(tps[0]);
+			double tps5 = requireFiniteNonNegative(tps[1]);
+			double tps15 = requireFiniteNonNegative(tps[2]);
+			double mspt = requireFiniteNonNegative(averageTickTime.doubleValue());
+			send(BridgeProtocol.object("type", "metrics-update", "id", nextId(), "supported", true, "tps1", tps1, "tps5", tps5, "tps15", tps15, "mspt", mspt));
+		} catch (Throwable unavailable) {
+			// Bukkit 구현에 지표 API가 없으면 지원 불가 상태를 명시하고 임의 값을 만들지 않습니다.
+			send(BridgeProtocol.object("type", "metrics-update", "id", nextId(), "supported", false));
+		}
+	}
+
+	private static double requireFiniteNonNegative(double value) {
+		if (Double.isNaN(value) || Double.isInfinite(value) || value < 0.0) throw new IllegalArgumentException("invalid-metric");
+		return value;
+	}
 
     private Map<String, Object> readSession() {
         File serverDirectory = getDataFolder().getParentFile().getParentFile();
