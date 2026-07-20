@@ -7,7 +7,7 @@
 - New per-server state: `.mineharbor/content-manifest.json` and `.mineharbor/automation.json`
 - New user areas: installed content/Modrinth/data packs, backup schedules and commands, and a live server status dashboard
 - New service boundaries: `ContentManagementServices.cs`, `ServerAutomation.cs`, and the UI integration in `ContentManagementUi.cs` / `ServerManagementFeatures.cs`
-- CI: `.github/workflows/ci.yml` validates PRs and main separately from `.github/workflows/build-release.yml`; both build the SDK-style `net48` project and the legacy Portable path.
+- CI: `.github/workflows/ci.yml` validates PRs and main separately from `.github/workflows/build-release.yml`; both build the SDK-style `net48` project and the legacy Portable path. PR #8 run `29729415761` passed both paths.
 - Local release validation passed with 24 test groups, 10 bridge protocol cases, Portable smoke/version tests, release artifact/hash verification, UI scan, and security regression scan.
 - The default runtime remains .NET Framework 4.8. `MineHarbor.csproj` is the migration bridge; do not switch to .NET 10 until updater, COM/UPnP, WinForms, installer, and Portable compatibility tests are equivalent.
 - Do not infer dashboard values. Paper/Purpur TPS/MSPT is shown only when the local bridge reports it; unsupported or disconnected values remain explicit.
@@ -87,7 +87,7 @@ This document was created for handoff purposes by analyzing the previous AI (Cod
 - **No Personal Identifiers**: No special privileges should be granted to `Mangom72` or any specific user in the logic (except for standard GitHub URLs).
 
 ## 10. Next Steps / Tasks to be Done
-- Run the new PR CI and resolve any difference between the GitHub Windows SDK build and the verified local legacy build.
+- Keep the passed PR #8 Windows SDK/legacy build gates required when merging or extending this work.
 - Expand bridge command completion and TPS/MSPT metrics to Fabric/Forge if a stable server-side API is selected.
 - Prepare for Windows Code Signing (Authenticode) and validate SmartScreen reputation on signed releases.
 - Exercise 125%, 150%, and mixed-DPI multi-monitor layouts with representative long Korean and English strings.
