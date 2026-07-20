@@ -7,7 +7,7 @@
   },
   "paperApi": {
     "fileName": "paper-api-26.2.build.56-alpha.jar",
-    "url": "https://repo.papermc.io/repository/maven-public/io/papermc/paper/paper-api/26.2.build.56-alpha/paper-api-26.2.build.56-alpha.jar",
+    "url": "https://artifactory.papermc.io/artifactory/universe/io/papermc/paper/paper-api/26.2.build.56-alpha/paper-api-26.2.build.56-alpha.jar",
     "sha256": "d59987721c2a731b32132c0f48a5ac7261cc10ee28057dfa2a7ce2f5ca8d8f6f",
     "size": 2882343
   },
