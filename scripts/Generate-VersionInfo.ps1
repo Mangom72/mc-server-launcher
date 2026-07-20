@@ -1,10 +1,13 @@
 ﻿[CmdletBinding()]
 param(
-    [string]$OutputPath = (Join-Path $PSScriptRoot '..\obj\GeneratedVersionInfo.cs')
+    [string]$OutputPath
 )
 
 $ErrorActionPreference = 'Stop'
-$projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$scriptDirectory = if (![string]::IsNullOrWhiteSpace($PSScriptRoot)) { $PSScriptRoot } else { [IO.Path]::GetDirectoryName($MyInvocation.MyCommand.Path) }
+if ([string]::IsNullOrWhiteSpace($scriptDirectory)) { throw 'Could not resolve the version script directory.' }
+$projectRoot = [IO.Path]::GetFullPath((Join-Path $scriptDirectory '..'))
+if ([string]::IsNullOrWhiteSpace($OutputPath)) { $OutputPath = Join-Path $projectRoot 'obj\GeneratedVersionInfo.cs' }
 $version = Get-Content -LiteralPath (Join-Path $projectRoot 'version.json') -Raw | ConvertFrom-Json
 if ($version.productVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'productVersion must use MAJOR.MINOR.PATCH.' }
 if ($version.buildNumber -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw 'buildNumber must use four numeric components.' }
