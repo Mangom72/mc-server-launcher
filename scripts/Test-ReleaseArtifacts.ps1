@@ -1,7 +1,8 @@
 ﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$ArtifactsDirectory,
-    [switch]$PublishedAssets
+    [switch]$PublishedAssets,
+    [switch]$RequireSelfSignedSignature
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,6 +38,15 @@ $metadata = [IO.File]::ReadAllText($updateMetadata, [Text.Encoding]::UTF8) | Con
 if ([string]$metadata.version -ne [string]$version.productVersion -or [string]$metadata.build -ne [string]$version.buildNumber) { throw 'Launcher update metadata version mismatch.' }
 $portable = Join-Path $artifacts 'MineHarbor.exe'
 $legacyPortable = Join-Path $artifacts 'Minecraft-Server-Launcher.exe'
+if ($RequireSelfSignedSignature) {
+    foreach ($signedPath in @($portable, $legacyPortable, (Join-Path $artifacts "MineHarbor-Setup-v$($version.productVersion).exe"))) {
+        $signature = Get-AuthenticodeSignature -LiteralPath $signedPath
+        if (!$signature.SignerCertificate) { throw "Self-signed Authenticode signer is missing: $([IO.Path]::GetFileName($signedPath))" }
+        if (![string]::Equals($signature.SignerCertificate.Subject, $signature.SignerCertificate.Issuer, [StringComparison]::OrdinalIgnoreCase)) { throw "Release signer is not self-signed: $([IO.Path]::GetFileName($signedPath))" }
+        if ($signature.SignerCertificate.Subject -ne 'CN=MineHarbor Self-Signed Release') { throw "Unexpected self-signed release subject: $($signature.SignerCertificate.Subject)" }
+        if (@('Valid', 'NotTrusted', 'UnknownError') -notcontains [string]$signature.Status) { throw "Self-signed Authenticode integrity failed: $([IO.Path]::GetFileName($signedPath)) ($($signature.Status))" }
+    }
+}
 if ([Version]$version.productVersion -le [Version]'1.3.2' -and (Get-Item -LiteralPath $portable).Length -lt 1MB) { throw 'The v1.3.2 compatibility bridge must remain large enough for updates from v1.2.1 and earlier.' }
 if ((Get-Item -LiteralPath $portable).Length -gt 25MB) { throw 'Portable launcher is too large. Check that a Java runtime was not embedded again.' }
 if ((Get-FileHash -LiteralPath $legacyPortable -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $portable -Algorithm SHA256).Hash) { throw 'Legacy launcher compatibility asset does not match MineHarbor.exe.' }

@@ -1,8 +1,22 @@
-# Changelog
+﻿# Changelog
 
 제품 버전은 [Semantic Versioning](https://semver.org/)을 사용하며, `26.2.45.xx` 값은 별도의 내부 빌드 번호입니다.
 
 Product versions follow [Semantic Versioning](https://semver.org/), while `26.2.45.xx` is a separate internal build number.
+
+## [1.7.2] - 2026-07-23
+
+### Korean
+
+- **보조 창 닫기 관통 차단 보강**: 제목 표시줄 X의 비클라이언트 입력이 시작되는 순간부터 주 창의 마우스 활성화를 거부하고, 같은 물리 입력의 클라이언트·비클라이언트·X 버튼·포인터 누름/해제를 창 종료까지 소비합니다. 창이 닫힌 뒤 다음 독립 클릭은 즉시 허용하며, 누락된 시스템 메시지에는 제한 시간 복구를 적용합니다.
+- **자체서명 전용 릴리스**: 릴리스마다 임시 RSA-3072/SHA-256 코드 서명 인증서와 난수 비밀번호를 생성해 Portable EXE와 설치 프로그램을 자체서명하고, PFX와 인증서 저장소 항목을 항상 삭제합니다. 공개 자산 검증은 동일 자체서명 주체와 Authenticode 무결성을 확인합니다.
+- **회귀 검증 확대**: 제목 표시줄 닫기 감지, 주 창 활성화 거부, 누름·해제 관통 차단, 다음 클릭 복구 및 임시 인증서 잔여물 제거를 자동 검증합니다.
+
+### English
+
+- **Stronger tool-window close isolation**: Starts protection at the title-bar X non-client input, rejects main-window mouse activation, and consumes the matching client, non-client, X-button, and pointer press/release until the tool window closes. The next independent click is allowed immediately, with a bounded timeout for missing system messages.
+- **Self-signed-only releases**: Creates a one-release RSA-3072/SHA-256 code-signing certificate with a random password, self-signs the Portable EXE and installer, and always removes the PFX and certificate-store entry. Published-asset verification checks the expected self-signed subject and Authenticode integrity.
+- **Expanded regressions**: Covers title-bar close detection, main-window activation rejection, press/release click-through blocking, next-click recovery, and cleanup of temporary certificate material.
 
 ## [1.7.1] - 2026-07-22
 

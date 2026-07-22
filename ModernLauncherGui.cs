@@ -1506,6 +1506,11 @@ internal static partial class Launcher
 
 		private readonly HashSet<string> modelessToolsBlockingServerChanges = new HashSet<string>(StringComparer.Ordinal);
 		private int ownedWindowClickGuardUntilTick;
+		private int ownedWindowClickGuardGeneration;
+		private IntPtr ownedWindowCloseHandle;
+		private Form ownedWindowCloseForm;
+		private bool ownedWindowClosePointerReleased;
+		private bool ownedWindowCloseCompleted;
 		private bool clickFilterInstalled;
 
 		private readonly ConcurrentQueue<string> consoleQueue = new ConcurrentQueue<string>();
@@ -3933,22 +3938,126 @@ internal static partial class Launcher
 
 		private static bool IsMouseClickMessage(int message)
 		{
-			return message >= 0x0201 && message <= 0x0209;
+			return (message >= 0x0201 && message <= 0x0209) ||
+				(message >= 0x020B && message <= 0x020D) ||
+				(message >= 0x00A1 && message <= 0x00A9) ||
+				(message >= 0x00AB && message <= 0x00AD) ||
+				message == 0x0246 || message == 0x0247;
+		}
+
+		private static bool IsMouseReleaseMessage(int message)
+		{
+			return message == 0x0202 || message == 0x0205 || message == 0x0208 || message == 0x020C ||
+				message == 0x00A2 || message == 0x00A5 || message == 0x00A8 || message == 0x00AC ||
+				message == 0x0247;
+		}
+
+		private static bool IsTitleBarCloseMessage(int message, IntPtr hitTest)
+		{
+			return message == 0x00A1 && hitTest.ToInt64() == 20;
 		}
 
 		[System.Runtime.InteropServices.DllImport("user32.dll")]
 		private static extern bool IsChild(IntPtr parentHandle, IntPtr childHandle);
 
-		private void ArmOwnedWindowClickGuard()
+		private Form FindTrackedModelessWindow(IntPtr windowHandle)
 		{
-			ownedWindowClickGuardUntilTick = unchecked(Environment.TickCount + 350);
+			foreach (Form form in modelessToolWindows.Values)
+			{
+				if (form == null || form.IsDisposed || !form.IsHandleCreated) continue;
+				if (windowHandle == form.Handle || IsChild(form.Handle, windowHandle)) return form;
+			}
+			return null;
+		}
+
+		private bool IsLauncherWindowHandle(IntPtr windowHandle)
+		{
+			return windowHandle == Handle || IsChild(Handle, windowHandle);
+		}
+
+		private void ArmOwnedWindowClickGuard(Form sourceForm, IntPtr sourceHandle)
+		{
+			ownedWindowClickGuardGeneration++;
+			ownedWindowCloseHandle = sourceHandle;
+			ownedWindowCloseForm = sourceForm;
+			ownedWindowClosePointerReleased = false;
+			ownedWindowCloseCompleted = false;
+			// 비클라이언트 닫기 입력의 해제 또는 창 종료 메시지가 누락되어도 보호가 영구히 남지 않게 제한합니다.
+			ownedWindowClickGuardUntilTick = unchecked(Environment.TickCount + 750);
+		}
+
+		private void CompleteOwnedWindowPointerClose(Form form)
+		{
+			if (form == null || ownedWindowCloseHandle == IntPtr.Zero || !object.ReferenceEquals(form, ownedWindowCloseForm)) return;
+			ownedWindowCloseCompleted = true;
+			TryReleaseOwnedWindowClickGuard();
+		}
+
+		private bool IsOwnedWindowClickGuardArmed()
+		{
+			if (ownedWindowCloseHandle == IntPtr.Zero) return false;
+			if (IsOwnedWindowClickGuardActive(Environment.TickCount, ownedWindowClickGuardUntilTick)) return true;
+			ownedWindowCloseHandle = IntPtr.Zero;
+			ownedWindowCloseForm = null;
+			ownedWindowClosePointerReleased = false;
+			ownedWindowCloseCompleted = false;
+			return false;
+		}
+
+		private void MarkOwnedWindowClosePointerReleased()
+		{
+			ownedWindowClosePointerReleased = true;
+			TryReleaseOwnedWindowClickGuard();
+		}
+
+		private void TryReleaseOwnedWindowClickGuard()
+		{
+			if (!ownedWindowClosePointerReleased || !ownedWindowCloseCompleted || IsDisposed || Disposing || !IsHandleCreated) return;
+			int generation = ownedWindowClickGuardGeneration;
+			try
+			{
+				BeginInvoke(new MethodInvoker(delegate
+				{
+					if (generation != ownedWindowClickGuardGeneration) return;
+					ownedWindowClickGuardUntilTick = Environment.TickCount;
+					ownedWindowCloseHandle = IntPtr.Zero;
+					ownedWindowCloseForm = null;
+					ownedWindowClosePointerReleased = false;
+					ownedWindowCloseCompleted = false;
+				}));
+			}
+			catch (InvalidOperationException)
+			{
+				// 종료 중에는 UI 핸들이 사라질 수 있으며, 메시지 필터도 곧 함께 제거됩니다.
+			}
 		}
 
 		public bool PreFilterMessage(ref Message message)
 		{
-			if (!IsMouseClickMessage(message.Msg) || !IsOwnedWindowClickGuardActive(Environment.TickCount, ownedWindowClickGuardUntilTick) || IsDisposed || !IsHandleCreated) return false;
-			if (message.HWnd != Handle && !IsChild(Handle, message.HWnd)) return false;
-			return true;
+			if (IsDisposed || !IsHandleCreated) return false;
+			Form closingForm = IsTitleBarCloseMessage(message.Msg, message.WParam) ? FindTrackedModelessWindow(message.HWnd) : null;
+			if (closingForm != null)
+			{
+				// FormClosing보다 앞선 시점에 보호를 시작해야 같은 물리 입력이 주 창으로 관통하지 않습니다.
+				ArmOwnedWindowClickGuard(closingForm, message.HWnd);
+				return false;
+			}
+
+			if (!IsOwnedWindowClickGuardArmed() || !IsMouseClickMessage(message.Msg)) return false;
+			bool launcherTarget = IsLauncherWindowHandle(message.HWnd);
+			if (IsMouseReleaseMessage(message.Msg)) MarkOwnedWindowClosePointerReleased();
+			return launcherTarget;
+		}
+
+		protected override void WndProc(ref Message message)
+		{
+			if (message.Msg == 0x0021 && IsOwnedWindowClickGuardArmed())
+			{
+				// MA_NOACTIVATEANDEAT: 주 창 활성화와 뒤따르는 클릭을 함께 소비합니다.
+				message.Result = new IntPtr(4);
+				return;
+			}
+			base.WndProc(ref message);
 		}
 
 		private void ShowModelessToolWindow(string key, Func<Form> factory, bool blocksServerChanges, Action onClosed)
@@ -3992,14 +4101,11 @@ internal static partial class Launcher
 			modelessToolWindows[key] = form;
 
 			if (blocksServerChanges) modelessToolsBlockingServerChanges.Add(key);
-			form.FormClosing += delegate(object sender, FormClosingEventArgs eventArgs)
-			{
-				if (eventArgs.CloseReason == CloseReason.UserClosing) ArmOwnedWindowClickGuard();
-			};
 
 			form.FormClosed += delegate
 
 			{
+				CompleteOwnedWindowPointerClose(form);
 
 				Form tracked;
 

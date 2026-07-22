@@ -659,10 +659,20 @@ internal static class LauncherTests
 
 		MethodInfo guardActive = launcherFormType.GetMethod("IsOwnedWindowClickGuardActive", BindingFlags.Static | BindingFlags.NonPublic);
 		MethodInfo mouseMessage = launcherFormType.GetMethod("IsMouseClickMessage", BindingFlags.Static | BindingFlags.NonPublic);
+		MethodInfo mouseRelease = launcherFormType.GetMethod("IsMouseReleaseMessage", BindingFlags.Static | BindingFlags.NonPublic);
+		MethodInfo titleBarClose = launcherFormType.GetMethod("IsTitleBarCloseMessage", BindingFlags.Static | BindingFlags.NonPublic);
 		Equal(true, guardActive.Invoke(null, new object[] { 100, 350 }), "보조 창 닫기 클릭 관통 보호 활성");
 		Equal(false, guardActive.Invoke(null, new object[] { 350, 350 }), "보조 창 닫기 클릭 관통 보호 만료");
 		Equal(true, mouseMessage.Invoke(null, new object[] { 0x0201 }), "마우스 클릭 메시지 식별");
+		Equal(true, mouseMessage.Invoke(null, new object[] { 0x020B }), "X 버튼 클릭 메시지 식별");
+		Equal(true, mouseMessage.Invoke(null, new object[] { 0x00A2 }), "비클라이언트 클릭 메시지 식별");
+		Equal(true, mouseMessage.Invoke(null, new object[] { 0x0246 }), "포인터 클릭 메시지 식별");
 		Equal(false, mouseMessage.Invoke(null, new object[] { 0x0100 }), "키보드 메시지 비차단");
+		Equal(true, mouseRelease.Invoke(null, new object[] { 0x0202 }), "마우스 해제 메시지 식별");
+		Equal(true, mouseRelease.Invoke(null, new object[] { 0x00A2 }), "비클라이언트 해제 메시지 식별");
+		Equal(false, mouseRelease.Invoke(null, new object[] { 0x0201 }), "마우스 누름 메시지 비해제");
+		Equal(true, titleBarClose.Invoke(null, new object[] { 0x00A1, new IntPtr(20) }), "제목 표시줄 닫기 입력 식별");
+		Equal(false, titleBarClose.Invoke(null, new object[] { 0x00A1, new IntPtr(8) }), "제목 표시줄 최소화 입력 제외");
 
 		Type profileType = launcher.GetNestedType("ManagedProfileRecord", BindingFlags.NonPublic);
 		object profile = Activator.CreateInstance(profileType, true);
@@ -718,6 +728,8 @@ internal static class LauncherTests
 		{
 			MethodInfo showTool = formType.GetMethod("ShowModelessToolWindow", BindingFlags.Instance | BindingFlags.NonPublic);
 			MethodInfo ensureSafe = formType.GetMethod("EnsureNoBlockingToolWindow", BindingFlags.Instance | BindingFlags.NonPublic);
+			MethodInfo filter = formType.GetMethod("PreFilterMessage", BindingFlags.Instance | BindingFlags.Public);
+			MethodInfo windowProcedure = formType.GetMethod("WndProc", BindingFlags.Instance | BindingFlags.NonPublic);
 			int created = 0;
 			int closed = 0;
 			Form child = null;
@@ -736,8 +748,26 @@ internal static class LauncherTests
 			showTool.Invoke(owner, new object[] { "test-tool", factory, true, onClosed });
 			Equal(1, created, "같은 기능 창 중복 생성 방지");
 			Equal(false, ensureSafe.Invoke(owner, null), "관리 창이 열린 동안 서버 변경 차단");
+			Message closeDown = Message.Create(child.Handle, 0x00A1, new IntPtr(20), IntPtr.Zero);
+			object[] closeArguments = new object[] { closeDown };
+			Equal(false, filter.Invoke(owner, closeArguments), "보조 창 닫기 입력 자체는 유지");
+			Message mouseActivate = Message.Create(owner.Handle, 0x0021, IntPtr.Zero, IntPtr.Zero);
+			object[] activationArguments = new object[] { mouseActivate };
+			windowProcedure.Invoke(owner, activationArguments);
+			Equal(new IntPtr(4), ((Message)activationArguments[0]).Result, "보조 창 닫기 중 주 창 활성화와 클릭 소비");
+			Button underlyingButton = new Button();
+			owner.Controls.Add(underlyingButton);
+			Message underlyingDown = Message.Create(underlyingButton.Handle, 0x0201, IntPtr.Zero, IntPtr.Zero);
+			object[] downArguments = new object[] { underlyingDown };
+			Equal(true, filter.Invoke(owner, downArguments), "보조 창 닫기 중 주 창 클릭 관통 차단");
 			child.Close();
+			Message underlyingUp = Message.Create(underlyingButton.Handle, 0x0202, IntPtr.Zero, IntPtr.Zero);
+			object[] upArguments = new object[] { underlyingUp };
+			Equal(true, filter.Invoke(owner, upArguments), "보조 창 닫기 마우스 해제 관통 차단");
 			Application.DoEvents();
+			Message nextDown = Message.Create(underlyingButton.Handle, 0x0201, IntPtr.Zero, IntPtr.Zero);
+			object[] nextArguments = new object[] { nextDown };
+			Equal(false, filter.Invoke(owner, nextArguments), "보조 창 종료 후 다음 독립 클릭 허용");
 			Equal(1, closed, "기능 창 종료 후 콜백 실행");
 			Equal(true, ensureSafe.Invoke(owner, null), "기능 창 종료 후 서버 변경 허용");
 		}

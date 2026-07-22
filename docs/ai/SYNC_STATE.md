@@ -1,5 +1,15 @@
 ﻿# AI Agent Synchronization State
 
+## Codex Tool Window Close Isolation and Self-Signed Release - 2026-07-23
+
+- **Current Version**: 1.7.2 (build 26.2.45.67)
+- **Branch**: `codex/close-click-guard-v1.7.2`
+- **Status**: 제목 표시줄 X 클릭 관통 방지와 자체서명 전용 릴리스 구현·로컬 검증 완료, PR/정식 릴리스 진행 중
+- 모델리스 도구 창의 `WM_NCLBUTTONDOWN/HTCLOSE`를 `FormClosing`보다 먼저 감지하고, 닫기 입력이 끝날 때까지 주 창의 `WM_MOUSEACTIVATE`를 `MA_NOACTIVATEANDEAT`로 거부합니다. 클라이언트·비클라이언트·X 버튼·포인터 누름/해제를 함께 소비하고, 창 종료와 입력 해제가 모두 확인되면 다음 독립 클릭을 즉시 허용하며 750ms 제한 시간으로 누락 메시지를 복구합니다.
+- 릴리스 워크플로와 로컬 릴리스 도구는 매 실행마다 난수 비밀번호의 임시 RSA-3072/SHA-256 자체서명 인증서를 생성해 Portable EXE와 설치 프로그램을 서명합니다. 외부 인증서 비밀은 사용하지 않으며 PFX와 CurrentUser 인증서 저장소 항목을 `finally`/`always()` 경로에서 삭제합니다.
+- `Test-ReleaseArtifacts.ps1 -RequireSelfSignedSignature`는 Portable/호환 별칭/설치 프로그램의 동일 자체서명 주체와 Authenticode 무결성을 검사합니다. 별도 서명 테스트는 변조본을 `NotSigned`/`HashMismatch`로 거부하고 인증서·PFX 잔여물이 없는지 확인합니다. 자체서명은 공개 배포자 신뢰나 SmartScreen 평판을 제공하지 않는다는 안내를 README, SECURITY, CONTRIBUTING과 릴리스 노트에 동기화했습니다.
+- 현재 로컬 검증: 고정 리소스 4종 해시 확인, 기존 Portable 빌드, `VERSION_CONSISTENCY_OK`, `PASSED=25`, `PORTABLE_VERSION_OK`, `PORTABLE_SMOKE_OK`, `BRIDGE_PROTOCOL_PASSED=10`, `MODERN_DIALOG_SCAN_OK`, `SECURITY_REGRESSION_SCAN_OK`, `SELF_SIGNED_RELEASE_SIGNING_OK=UnknownError`, 변조 거부, 인증서 정리 및 자체서명 설치 산출물 7종 검증을 통과했습니다. 로컬에는 .NET SDK가 없어 SDK 병행 빌드는 GitHub PR/릴리스 CI에서 확인합니다. UPnP 검증은 루프백 가짜 장치와 가짜 COM만 사용했습니다.
+
 ## Codex Secondary Window Dark Theme - 2026-07-22
 
 - **Current Version**: 1.7.1 (build 26.2.45.66)

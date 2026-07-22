@@ -1,14 +1,14 @@
 # CODEX_HANDOFF.md
 
-## 0. Current implementation state (v1.6.0)
+## 0. Current implementation state (v1.7.2)
 
-- Release-state branch: `codex/v1.6.0-release-state`
-- Version source of truth: `version.json` = 1.6.0 / build 26.2.45.64
+- Active feature branch: `codex/close-click-guard-v1.7.2`
+- Version source of truth: `version.json` = 1.7.2 / build 26.2.45.67
 - New per-server state: `.mineharbor/content-manifest.json` and `.mineharbor/automation.json`
 - New user areas: installed content/Modrinth/data packs, backup schedules and commands, and a live server status dashboard
 - New service boundaries: `ContentManagementServices.cs`, `ServerAutomation.cs`, and the UI integration in `ContentManagementUi.cs` / `ServerManagementFeatures.cs`
-- CI: `.github/workflows/ci.yml` validates PRs and main separately from `.github/workflows/build-release.yml`; both build the SDK-style `net48` project and the legacy Portable path. PR #8 was merged as `7e342b0`, and release run `29733089559` built, tested, packaged, verified, and published `v1.6.0` successfully.
-- Local and publicly downloaded release validation passed with 24 test groups, 10 bridge protocol cases, Portable smoke/version tests, release artifact/hash verification, UI scan, and security regression scan. The public `v1.5.23` launcher update routine also detected, downloaded, and hash-verified `v1.6.0`.
+- CI: `.github/workflows/ci.yml` validates PRs and main separately from `.github/workflows/build-release.yml`; both build the SDK-style `net48` project and the legacy Portable path. The v1.7.2 release path creates an ephemeral self-signed certificate, signs Portable and installer assets, verifies their embedded signer and integrity, and removes all temporary certificate material.
+- Local v1.7.2 validation passed 25 test groups, 10 bridge protocol cases, Portable smoke/version tests, self-signed Portable/installer and seven-asset verification, tamper rejection, UI scan, and security regression scan. The local machine lacks a .NET SDK, so the parallel SDK-style build remains a required GitHub PR/release gate.
 - The default runtime remains .NET Framework 4.8. `MineHarbor.csproj` is the migration bridge; do not switch to .NET 10 until updater, COM/UPnP, WinForms, installer, and Portable compatibility tests are equivalent.
 - Do not infer dashboard values. Paper/Purpur TPS/MSPT is shown only when the local bridge reports it; unsupported or disconnected values remain explicit.
 
@@ -41,7 +41,7 @@ This document was created for handoff purposes by analyzing the previous AI (Cod
 
 ## 4. Features In Progress or Incomplete
 - **Fabric/Forge Bridge**: External bridge command auto-completion for non-Paper servers (like Fabric) is not yet implemented.
-- **Authenticode (Code Signing)**: Currently lacks a Windows signing certificate, so running the app may trigger a `NotSigned` SmartScreen warning.
+- **Authenticode trust**: Release files are self-signed with an ephemeral per-release certificate. This proves embedded-signature integrity but does not establish a publicly trusted publisher or SmartScreen reputation, so warnings can still appear.
 - **High DPI Scaling**: Needs further testing and optimization for edge cases like 125%, 150%+ multi-monitor environments.
 - **Modern .NET Runtime**: The repository now has an SDK-style `net48` project, but moving the shipped runtime to .NET 10 remains a staged migration rather than a completed target switch.
 - **Metrics Bridge Coverage**: TPS/MSPT metrics are implemented for the Paper/Purpur bridge. Fabric/Forge and Vanilla expose these values as unsupported instead of estimates.
@@ -89,7 +89,7 @@ This document was created for handoff purposes by analyzing the previous AI (Cod
 ## 10. Next Steps / Tasks to be Done
 - Keep the PR/main Windows SDK/legacy build gates and tagged release verification required when extending this work.
 - Expand bridge command completion and TPS/MSPT metrics to Fabric/Forge if a stable server-side API is selected.
-- Prepare for Windows Code Signing (Authenticode) and validate SmartScreen reputation on signed releases.
+- If public publisher trust is later required, evaluate a managed open-source signing service without weakening the current ephemeral self-signing and hash-verification gates.
 - Exercise 125%, 150%, and mixed-DPI multi-monitor layouts with representative long Korean and English strings.
 - Continue the .NET 10 migration sequence in `docs/architecture/DOTNET_MODERNIZATION.md` without changing the shipped target until compatibility gates pass.
 
