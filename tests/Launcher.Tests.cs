@@ -557,6 +557,7 @@ internal static class LauncherTests
 				AssertSingleLineTextFits(quickStatus, "콘솔 열림 영어 빠른 명령 상태");
 				AssertButtonTextFits(quickMenu, "콘솔 열림 영어 빠른 명령 선택");
 				AssertButtonTextFits(quickManage, "콘솔 열림 영어 명령·브리지 관리");
+				if (quickMenu.Bounds.IntersectsWith(quickManage.Bounds)) throw new InvalidOperationException("좁은 빠른 명령 패널의 버튼이 서로 겹칩니다.");
 
 				CheckBox wrap = (CheckBox)GetPrivateField(formType, form, "consoleWrapBox");
 				ComboBox filter = (ComboBox)GetPrivateField(formType, form, "consoleFilterBox");

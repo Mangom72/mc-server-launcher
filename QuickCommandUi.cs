@@ -171,13 +171,17 @@ internal static partial class Launcher
 			int manageWidth = Math.Max(192, MeasureQuickCommandButtonWidth(quickCommandManageButton));
 			if (menuWidth + gap + manageWidth > width)
 			{
-				int overflow = menuWidth + gap + manageWidth - width;
-				int menuReduction = Math.Min(overflow / 2, Math.Max(0, menuWidth - 140));
-				menuWidth -= menuReduction;
-				manageWidth = Math.Max(140, width - gap - menuWidth);
+				// 좁은 동반 패널에서는 문구를 줄이지 않고 버튼을 세로로 배치한다.
+				quickCommandMenuButton.Bounds = new Rectangle(16, 76, width, 40);
+				quickCommandManageButton.Bounds = new Rectangle(16, 122, width, 40);
+				quickCommandSyntax.Location = new Point(16, 168);
 			}
-			quickCommandMenuButton.Bounds = new Rectangle(16, 76, menuWidth, 40);
-			quickCommandManageButton.Bounds = new Rectangle(16 + menuWidth + gap, 76, Math.Max(140, Math.Min(manageWidth, width - menuWidth - gap)), 40);
+			else
+			{
+				quickCommandMenuButton.Bounds = new Rectangle(16, 76, menuWidth, 40);
+				quickCommandManageButton.Bounds = new Rectangle(16 + menuWidth + gap, 76, manageWidth, 40);
+				quickCommandSyntax.Location = new Point(16, 122);
+			}
 			Control input = quickCommandBox.Parent;
 			input.Location = new Point(16, Math.Max(144, quickCommandPanel.ClientSize.Height - 52));
 			input.Size = new Size(width, 40);
