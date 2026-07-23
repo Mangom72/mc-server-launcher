@@ -1,14 +1,15 @@
 # CODEX_HANDOFF.md
 
-## 0. Current implementation state (v1.7.3 release candidate)
+## 0. Current implementation state (v1.7.3 released)
 
-- Feature branch: `codex/ux-audit-v1.7.3`
+- Release-state branch: `codex/v1.7.3-release-state` (feature branch: `codex/ux-audit-v1.7.3`)
 - Version source of truth: `version.json` = 1.7.3 / build 26.2.45.68
 - New per-server state: `.mineharbor/content-manifest.json` and `.mineharbor/automation.json`
 - New user areas: installed content/Modrinth/data packs, backup schedules and commands, and a live server status dashboard
 - New service boundaries: `ContentManagementServices.cs`, `ServerAutomation.cs`, and the UI integration in `ContentManagementUi.cs` / `ServerManagementFeatures.cs`
-- CI: `.github/workflows/ci.yml` validates PRs and main separately from `.github/workflows/build-release.yml`; both build the SDK-style `net48` project and the legacy Portable path. The v1.7.3 release candidate is awaiting PR CI and the tagged self-signed release workflow.
-- Local v1.7.3 validation passed 26 launcher test groups, 10 bridge protocol cases, Portable smoke/version, UI scan, and security regression scan. Windows 11 at 125% DPI was visually checked in Korean/English, dark/light, and console open/closed states; the settings were restored to Korean dark afterward.
+- CI: `.github/workflows/ci.yml` validates PRs and main separately from `.github/workflows/build-release.yml`; both build the SDK-style `net48` project and the legacy Portable path. PR [#16](https://github.com/Mangom72/MineHarbor/pull/16) was merged as `4ac8500`, and the [v1.7.3 release workflow](https://github.com/Mangom72/MineHarbor/actions/runs/30038232632) passed before publishing the [stable release](https://github.com/Mangom72/MineHarbor/releases/tag/v1.7.3).
+- Local v1.7.3 validation passed 26 launcher test groups, 10 bridge protocol cases, Portable smoke/version, UI scan, security regression scan, and seven self-signed release artifacts. Windows 11 at 125% DPI was visually checked in Korean/English, dark/light, and console open/closed states; the settings were restored to Korean dark afterward.
+- Seven public assets were downloaded and independently checked for hashes, versions, self-signed Authenticode integrity, and archive structure. The public v1.7.2 launcher updated to v1.7.3 through the published metadata (`PUBLIC_AUTO_UPDATE_OK=1.7.2->1.7.3`), and the downloaded launcher passed the complete test suite again.
 - The default runtime remains .NET Framework 4.8. `MineHarbor.csproj` is the migration bridge; do not switch to .NET 10 until updater, COM/UPnP, WinForms, installer, and Portable compatibility tests are equivalent.
 - Do not infer dashboard values. Paper/Purpur TPS/MSPT is shown only when the local bridge reports it; unsupported or disconnected values remain explicit.
 
